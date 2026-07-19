@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type EscalationPayload, type MiloEvent, type PlanStep, type TaskRow } from "../lib/api";
 import { Md } from "./Md";
 
-const AVATAR: Record<string, string> = { owner: "长", secretariat: "秘", system: "系" };
+const AVATAR: Record<string, string> = { owner: "你", secretariat: "秘", system: "系" };
+const ACTOR_ZH: Record<string, string> = { owner: "你", secretariat: "秘书", system: "系统" };
+const who = (a: string) => ACTOR_ZH[a] ?? a;
 
 const STATE_ZH: Record<string, string> = {
   queued: "排队", assigned: "已派单", working: "工作中", input_required: "等你拍板",
@@ -90,7 +92,7 @@ function StatusRun({ item, live, mode }: { item: Extract<Item, { kind: "status-r
       <span className="ava">{AVATAR[item.actor] ?? item.actor.slice(0, 1).toUpperCase()}</span>
       <div className="mb">
         <div className="mh">
-          {item.actor}
+          {who(item.actor)}
           <span className="tag">汇报</span>
           {item.runId && <span className="muted"> · run {item.runId.slice(-4)}</span>}
           <button className="stoggle" onClick={() => setOpen(!expanded)}>
@@ -271,7 +273,7 @@ export function GroupView({
         <div>
           <b>{title || "任务群"}</b>
           <div className="gcsub">
-            你 + 秘书长 + 数字员工 · 默认免打扰，@你 才通知
+            你 + 秘书 + 成员 · 默认免打扰，@你 才通知
             {tasks.length > 0 && ` · ${done}/${tasks.length} 已验收`}
           </div>
         </div>
@@ -331,7 +333,7 @@ export function GroupView({
               </span>
               <div className="mb">
                 <div className="mh">
-                  {e.actor} · {e.ts.slice(11, 19)}
+                  {who(e.actor)} · {e.ts.slice(11, 19)}
                   {tag && <span className={`tag ${tag.up ? "up" : ""}`}>{tag.text}</span>}
                   {e.run_id && <span className="muted"> · run {e.run_id.slice(-4)}</span>}
                 </div>

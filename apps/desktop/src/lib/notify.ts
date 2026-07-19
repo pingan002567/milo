@@ -98,7 +98,7 @@ export function notifyForEvent(e: MiloEvent): void {
   if (notified.has(key)) return;
   notified.add(key);
 
-  const who = e.actor === "secretariat" ? "秘书长" : e.actor;
+  const who = e.actor === "secretariat" ? "秘书" : e.actor;
   const title = reach === "notify" ? `${who}：有事项等你处理` : `${who} 请示`;
   const body = String(p.question || e.content || p.msg || "点击查看详情").slice(0, 160);
   push(title, body, e.group_id);

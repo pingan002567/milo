@@ -15,12 +15,12 @@ fn main() {
             // 托盘常驻：关掉窗口不等于停工——成员仍在 milod 里干活，
             // 有请示时经系统通知触达（桌面端相对 Web 的核心价值）。
             let show = MenuItem::with_id(app, "show", "打开 Milo", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "退出（数字员工将停止）", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "退出（成员将停止）", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
 
             TrayIconBuilder::new()
                 .menu(&menu)
-                .tooltip("Milo — 一人公司指挥台")
+                .tooltip("Milo — AI 团队指挥台")
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
                         if let Some(w) = app.get_webview_window("main") {

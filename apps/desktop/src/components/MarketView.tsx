@@ -41,12 +41,12 @@ export function MarketView({ onChanged }: { onChanged: () => void }) {
   const reload = () => api.market().then((r) => setPacks(r.packs)).catch(() => setPacks([]));
   useEffect(() => { reload(); }, []);
 
-  // 市场只做"发现+验货"（§3.5）：下载入库 / 收藏记引用，聘用在「公司」页
+  // 市场只做"发现+验货"（§3.5）：下载入库 / 收藏记引用，招募在「团队」页
   const download = async (p: PackInfo) => {
     setBusy(p.path); setMsg(null);
     try {
       await api.download(p.path);
-      setMsg(`${p.name} 已下载到 Agent 库——到「公司」页的 Agent 库为它聘用实例`);
+      setMsg(`${p.name} 已下载到 Agent 库——到「团队」页的 Agent 库招募成员`);
       await reload();
       onChanged();
     } catch (e: any) {
@@ -106,7 +106,7 @@ export function MarketView({ onChanged }: { onChanged: () => void }) {
                     {p.starred ? "★ 已收藏" : "☆ 收藏"}
                   </button>
                   {p.downloaded ? (
-                    <span className="chip ok" title="到「公司」页的 Agent 库聘用">已在库中</span>
+                    <span className="chip ok" title="到「团队」页的 Agent 库招募">已在库中</span>
                   ) : (
                     <button className="btn primary sm"
                             disabled={busy === p.path} onClick={() => download(p)}>

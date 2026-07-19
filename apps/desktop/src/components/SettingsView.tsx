@@ -72,25 +72,25 @@ function GeneralTab({ org }: { org: string }) {
         </SettingRow>
       </SectionCard>
 
-      <SectionCard title="人事红线" subtitle="V0 锁定" description="安全护栏，本版本不可关闭">
-        <SettingRow label="人事变动" sub="招聘 / 入职 / 停职 / 辞退只能由你发起">
-          <span className="tag" style={{ color: "var(--green)", background: "var(--green-soft)" }}>仅限老板</span>
+      <SectionCard title="成员管理红线" subtitle="V0 锁定" description="安全护栏，本版本不可关闭">
+        <SettingRow label="成员变动" sub="招募 / 加入 / 停职 / 移出只能由你发起">
+          <span className="tag" style={{ color: "var(--green)", background: "var(--green-soft)" }}>仅限你</span>
         </SettingRow>
-        <SettingRow label="秘书长权限" sub="只执行与建议，无自动人事动作">
+        <SettingRow label="秘书权限" sub="只执行与建议，无自动成员变动">
           <span className="tag">执行者</span>
         </SettingRow>
       </SectionCard>
 
-      <SectionCard title="工作区" description="当前公司与数据目录；切换公司在左栏顶部">
-        <SettingRow label="当前公司">
+      <SectionCard title="工作区" description="当前团队与数据目录；切换团队在左栏顶部">
+        <SettingRow label="当前团队">
           <span className="mono" style={{ fontSize: 12 }}>{org}</span>
         </SettingRow>
-        <SettingRow label="数据目录" sub="花名册 / 事件库 / 交付产物都在这里">
+        <SettingRow label="数据目录" sub="名册 / 事件库 / 交付产物都在这里">
           <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", wordBreak: "break-all", textAlign: "right" }}>
             ~/.milo/orgs/{org}
           </span>
         </SettingRow>
-        <SettingRow label="数字员工">
+        <SettingRow label="成员">
           <span className="mono" style={{ fontSize: 12 }}>{members ?? "-"} / 上限 {limit ?? "-"}</span>
         </SettingRow>
       </SectionCard>
@@ -122,7 +122,7 @@ function AiTab({ org }: { org: string }) {
       setDirty(false);
       setApiKey("");
     } catch {
-      setMsg("读取配置失败——该公司可能缺少 bindings.yaml");
+      setMsg("读取配置失败——该团队可能缺少 bindings.yaml");
     }
   }, [org]);
 
@@ -157,7 +157,7 @@ function AiTab({ org }: { org: string }) {
   return (
     <div className="settings-stack">
       <SectionCard icon="🤖" title="模型接入" subtitle="API Key / 模型 / 连接"
-        description="数字员工与秘书长共用此绑定；改动对运行中的员工需重启公司后生效">
+        description="成员与秘书共用此绑定；改动对运行中的成员需重启团队后生效">
         <div style={{ display: "grid", gap: 12 }}>
           <label>
             <span className="field-label">

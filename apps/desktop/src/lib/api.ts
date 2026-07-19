@@ -121,7 +121,7 @@ export const api = {
 
   market: (): Promise<{ packs: PackInfo[] }> => fetch(`/api/market`).then(j),
 
-  /** 聘用：从 Agent 库模板 new 一个具名实例（activate=true 立即入职）。 */
+  /** 招募：从 Agent 库模板 new 一个具名成员实例（activate=true 立即加入）。 */
   hire: (org: string, agent: string, name: string, activate: boolean) =>
     fetch(`/api/orgs/${org}/members`, {
       method: "POST", headers: { "Content-Type": "application/json" },

@@ -146,28 +146,28 @@ export default function App() {
       <aside className="side">
         <div className="brand">Milo</div>
         <select className="orgsel" value={ORG} onChange={(e) => switchOrg(e.target.value)}
-                aria-label="切换公司">
+                aria-label="切换团队">
           {orgs.map((o) => (
             <option key={o.org} value={o.org}>
-              {o.open ? "● " : "○ "}{o.org}（{o.members} 名员工）
+              {o.open ? "● " : "○ "}{o.org}（{o.members} 名成员）
             </option>
           ))}
           {!orgs.some((o) => o.org === ORG) && <option value={ORG}>{ORG}</option>}
         </select>
         <button className={`nv ${screen === "chat" ? "on" : ""}`} onClick={() => setScreen("chat")}>
-          💬 秘书长
+          💬 秘书
         </button>
         <button className={`nv ${screen === "todo" ? "on" : ""}`} onClick={() => setScreen("todo")}>
           ✅ 待办{pendingTotal > 0 && <span className="bdg">{pendingTotal}</span>}
         </button>
         <button className={`nv ${screen === "org" ? "on" : ""}`} onClick={() => setScreen("org")}>
-          🏛 公司
+          👥 团队
         </button>
         <button className={`nv ${screen === "market" ? "on" : ""}`} onClick={() => setScreen("market")}>
           🛒 市场
         </button>
         <button className={`nv ${screen === "roster" ? "on" : ""}`} onClick={() => setScreen("roster")}>
-          🗂 花名册
+          🗂 名册
         </button>
         <button className="nv" onClick={() => setSettingsOpen(true)}>
           ⚙️ 设置
@@ -190,16 +190,16 @@ export default function App() {
             {shownGroups.length === 0 && <div className="foot">暂无任务群</div>}
           </div>
         </div>
-        <div className="foot">桌面壳 v0.1 · {members.length} 名数字员工</div>
+        <div className="foot">桌面壳 v0.1 · {members.length} 名成员</div>
       </aside>
 
       {/* ── 中栏：主内容 ── */}
       <main className="main">
         {screen === "chat" && (
           <>
-            <div className="h">向秘书长下达任务</div>
+            <div className="h">向秘书下达任务</div>
             <div className="muted" style={{ maxWidth: 620, marginBottom: 14 }}>
-              秘书长会把需求分解成计划交你批准，然后派给数字员工；只有需要你拍板的事才会打扰你。
+              秘书会把需求分解成计划交你批准，然后派给团队成员；只有需要你拍板的事才会打扰你。
             </div>
             <div className="composer">
               <input placeholder="例如：整理三条大模型应用场景要点…" value={input}
@@ -262,7 +262,7 @@ export default function App() {
           </>
         ) : (
           <>
-            <div className="ihead">数字员工</div>
+            <div className="ihead">成员</div>
             {members.map((m) => (
               <div key={m.name} style={{ fontSize: 12.5, padding: "5px 0" }}>
                 <b>{m.name}</b>
@@ -271,7 +271,7 @@ export default function App() {
             ))}
             <div className="ihead">说明</div>
             <div className="muted">
-              秘书长是系统角色（≈办公室主任），不是员工：分解任务、按能力派单、汇总汇报、
+              秘书是系统角色（≈办公室主任），不是成员：分解任务、按能力派单、汇总汇报、
               只在需要拍板时打扰你。人事决定权只属于你。
             </div>
           </>
@@ -284,7 +284,7 @@ export default function App() {
       <div className="statusbar">
         <span className={`dot ${conn}`} />
         <span>{conn === "open" ? "已连接 milod" : conn === "connecting" ? "连接中…" : "已断开（自动重连）"}</span>
-        <span>{members.length} 名数字员工</span>
+        <span>{members.length} 名成员</span>
         <span>{groups.length} 个任务群</span>
         {pendingTotal > 0 && <span style={{ color: "var(--amber)" }}>{pendingTotal} 项待你决定</span>}
       </div>
