@@ -22,7 +22,6 @@ class Hub:
         self._desks: dict[str, Any] = {}  # org -> SecretaryDesk（对话式操作面）
         self._subs: dict[str, set[asyncio.Queue]] = {}
         self._tasks: dict[str, asyncio.Task] = {}
-        self._pending_plans: dict[str, list] = {}  # group_id -> 待批准的任务信封
         self._lock = asyncio.Lock()
 
     # ---- 秘书 ----------------------------------------------------------
@@ -113,8 +112,9 @@ class Hub:
                                "task_id": e.task_id} for e in envelopes],
                      "approved": auto_approve}))
         if not auto_approve:
-            # 计划前置授权：暂存等组长批准（编制设计 §5.2）——批准即授权到里程碑
-            self._pending_plans[group_id] = envelopes
+            # 计划前置授权：暂存等组长批准（编制设计 §5.2）——批准即授权到里程碑。
+            # 落盘而非内存：milod 重启后计划仍在，群不会悬置成"僵尸待批"
+            office.store.save_pending_plan(group_id, envelopes)
             office.store.set_group_status(group_id, "waiting")
             return
 
@@ -122,8 +122,9 @@ class Hub:
         office.sync_group_status(group_id)
 
     # ---- 计划批准 ------------------------------------------------------
-    def pending_plan(self, group_id: str) -> list | None:
-        return self._pending_plans.get(group_id)
+    async def pending_plan(self, org: str, group_id: str) -> list | None:
+        office = await self.office(org)
+        return office.store.pending_plan(group_id)
 
     async def approve_plan(
         self, org: str, group_id: str, *, edits: dict[str, Any] | None = None
@@ -134,10 +135,11 @@ class Hub:
         目标与交付要求要一起改——只改目标会让验收仍按旧 output_spec 判定
         （实测踩过：把"输出文件"改成"一句话"后仍被判"缺少产物"）。
         """
-        envelopes = self._pending_plans.pop(group_id, None)
+        office = await self.office(org)
+        envelopes = office.store.pending_plan(group_id)
         if envelopes is None:
             return False
-        office = await self.office(org)
+        office.store.delete_pending_plan(group_id)
         for env in envelopes if edits else []:
             edit = edits.get(env.task_id)
             if edit is None:
@@ -172,10 +174,11 @@ class Hub:
         return True
 
     async def reject_plan(self, org: str, group_id: str, reason: str = "") -> bool:
-        envelopes = self._pending_plans.pop(group_id, None)
+        office = await self.office(org)
+        envelopes = office.store.pending_plan(group_id)
         if envelopes is None:
             return False
-        office = await self.office(org)
+        office.store.delete_pending_plan(group_id)
         office._emit(MiloEvent(
             group_id=group_id, type=EventType.CHAT, actor="owner",
             payload={"text": f"未批准计划{('：' + reason) if reason else ''}"}))

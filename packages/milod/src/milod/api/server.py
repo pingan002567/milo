@@ -682,7 +682,7 @@ async def create_run(org: str, body: RunRequest) -> dict[str, Any]:
 @app.get("/api/orgs/{org}/groups/{group_id}/plan")
 async def get_plan(org: str, group_id: str) -> dict[str, Any]:
     """取待批准的计划——桌面端渲染计划卡（批准即授权到里程碑）。"""
-    envelopes = hub.pending_plan(group_id)
+    envelopes = await hub.pending_plan(org, group_id)
     if envelopes is None:
         raise HTTPException(404, "该任务群没有待批准的计划")
     return {

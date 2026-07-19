@@ -140,6 +140,29 @@ class Store:
         )
         self._conn.commit()
 
+    # ---- 待批计划（落盘，milod 重启不丢）--------------------------------
+    def save_pending_plan(self, group_id: str, envelopes: list[TaskEnvelope]) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO pending_plans(group_id,envelopes,created_at)"
+            " VALUES(?,?,?)",
+            (group_id,
+             json.dumps([e.model_dump(mode="json") for e in envelopes], ensure_ascii=False),
+             self._now()),
+        )
+        self._conn.commit()
+
+    def pending_plan(self, group_id: str) -> list[TaskEnvelope] | None:
+        row = self._conn.execute(
+            "SELECT envelopes FROM pending_plans WHERE group_id=?", (group_id,)
+        ).fetchone()
+        if not row:
+            return None
+        return [TaskEnvelope.model_validate(d) for d in json.loads(row[0])]
+
+    def delete_pending_plan(self, group_id: str) -> None:
+        self._conn.execute("DELETE FROM pending_plans WHERE group_id=?", (group_id,))
+        self._conn.commit()
+
     def _touch_group(self, group_id: str) -> None:
         now = self._now()
         self._conn.execute(
