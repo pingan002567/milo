@@ -37,6 +37,10 @@ def _split_payload(ev: MiloEvent) -> tuple[str, dict[str, Any]]:
     if not content and ev.type == EventType.ESCALATION:
         content = str(payload.get("fallback_text") or "")
     category = "error" if payload.get("error") else CATEGORY.get(ev.type, "message")
+    # 思考过程（token 级 trace 流）与汇报（结构化 report）在粗分类上分开：
+    # 审计过滤"只看 trace"、秘书/工具"排除 trace"都靠它
+    if ev.type == EventType.STATUS and payload.get("kind") == "trace":
+        category = "trace"
     return content, {"category": category, **payload}
 
 

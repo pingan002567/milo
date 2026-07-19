@@ -368,3 +368,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 .secpage { display: flex; flex-direction: column; height: calc(100vh - 76px); max-width: 760px; }
 .secmsgs { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 8px; }
 .seccomposer { margin-top: 10px; }
+
+/* 汇报动作行（工具调用等结构化进度；思考过程走折叠块） */
+.actline { font-size: 12px; color: var(--ink-3); margin: 4px 0 4px 35px;
+  font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.actline b { color: var(--ink-2); font-family: inherit; }

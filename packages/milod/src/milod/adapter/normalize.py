@@ -148,6 +148,8 @@ def iter_normalized(
     buf: list[str] = []
 
     def flush_status() -> Iterator[EventFrame]:
+        # 流式文本 = 成员的思考/工作过程（trace）：入群可查可审计，
+        # 但不是"汇报"——秘书与验收不消费它（真正的汇报见工具调用 report）
         if buf:
             text = "".join(buf).strip()
             buf.clear()
@@ -155,7 +157,8 @@ def iter_normalized(
                 yield EventFrame(
                     event="status",
                     task_id=task_id,
-                    payload={"doing": text[:400], "why": "(untrusted member text)"},
+                    payload={"doing": text[:400], "kind": "trace",
+                             "why": "(untrusted member text)"},
                 )
 
     for ev in stream:
@@ -173,6 +176,19 @@ def iter_normalized(
                 continue
             held = escalation_payload(args)
             pending_escalation = False
+            continue
+
+        # 工具执行完成（ToolMessage，非澄清）= 结构化汇报：一次调用一条，
+        # 有信息量、可被秘书理解——与 token 级 trace 流严格分开
+        if (etype == "messages-tuple" and data.get("type") == "tool"
+                and data.get("name") and data.get("name") != "ask_clarification"):
+            yield from flush_status()
+            snippet = str(data.get("content") or "")[:80].replace("\n", " ")
+            yield EventFrame(
+                event="status", task_id=task_id,
+                payload={"doing": f"{data['name']}：{snippet}" if snippet else str(data["name"]),
+                         "kind": "report", "tool": str(data["name"])},
+            )
             continue
 
         if etype == "messages-tuple" and data.get("type") == "ai":

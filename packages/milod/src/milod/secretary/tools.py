@@ -79,11 +79,15 @@ def get_task_group_tool(group_id: str) -> str:
         JSON：status、tasks（每步的成员/状态）、recent（最近 8 条关键事件摘要）。
     """
     r = _get(f"/api/orgs/{_org()}/groups/{group_id}")
-    recent = [
-        {"type": e["type"], "actor": e["actor"],
-         "text": str(e.get("content") or "")[:160]}
-        for e in r.get("events", []) if e["type"] != "status"
-    ][-8:]
+    recent = []
+    for e in r.get("events", []):
+        # 思考过程（trace）是审计材料，不给秘书理解；汇报（report）与交付/验收才是
+        # 秘书的信息面（旧数据无 kind 字段的 status 一律视为 trace）
+        if e["type"] == "status" and (e.get("payload") or {}).get("kind") != "report":
+            continue
+        recent.append({"type": e["type"], "actor": e["actor"],
+                       "text": str(e.get("content") or "")[:160]})
+    recent = recent[-10:]
     return _j({"status": r.get("status"), "tasks": r.get("tasks"), "recent": recent})
 
 

@@ -27,6 +27,7 @@ function readable(payload: Record<string, any>): string {
 const TAG: Partial<Record<string, { text: string; up?: boolean }>> = {
   envelope: { text: "派单" },
   status: { text: "汇报" },
+  trace: { text: "思考过程" },
   escalation: { text: "请示", up: true },
   delivery: { text: "交付" },
   acceptance: { text: "验收" },
@@ -56,7 +57,11 @@ function buildItems(events: MiloEvent[]): Item[] {
       });
     }
     if (e.type === "status") {
-      // 同成员同 run 的连续汇报合并为一个块（token 级碎片 → 一段完整文本）
+      // 汇报（结构化 report，如工具调用）独立成行；思考过程（trace/旧数据）合并成块
+      if (e.payload?.kind === "report") {
+        items.push({ kind: "event", key: e.event_id, e });
+        continue;
+      }
       const prev = items[items.length - 1];
       const text = e.content || String(e.payload?.doing ?? "");
       if (prev && prev.kind === "status-run" && prev.actor === e.actor
@@ -93,7 +98,7 @@ function StatusRun({ item, live, mode }: { item: Extract<Item, { kind: "status-r
       <div className="mb">
         <div className="mh">
           {who(item.actor)}
-          <span className="tag">汇报</span>
+          <span className="tag">思考过程</span>
           {item.runId && <span className="muted"> · run {item.runId.slice(-4)}</span>}
           <button className="stoggle" onClick={() => setOpen(!expanded)}>
             {expanded ? "收起" : `展开（${item.text.length} 字）`}
@@ -103,7 +108,7 @@ function StatusRun({ item, live, mode }: { item: Extract<Item, { kind: "status-r
           <div className="mx"><Md text={item.text} /></div>
         ) : (
           <div className="mx dim" onClick={() => setOpen(true)}>
-            {live ? "⋯ 工作中" : "工作过程"} · 已输出 {item.text.length} 字 · 点击展开
+            {live ? "⋯ 思考中" : "思考过程（审计可查）"} · 已输出 {item.text.length} 字 · 点击展开
           </div>
         )}
       </div>
@@ -315,6 +320,13 @@ export function GroupView({
           }
 
           const e = it.e;
+          if (e.type === "status" && e.payload?.kind === "report") {
+            return (
+              <div key={it.key} className="actline">
+                ⚙ <b>{who(e.actor)}</b> {String(e.content || e.payload?.doing || "")}
+              </div>
+            );
+          }
           if (e.type === "system") {
             const msg = e.content || e.payload?.msg || e.payload?.error || "";
             return msg ? <div key={it.key} className="sys">{String(msg)}</div> : null;
