@@ -32,32 +32,34 @@ function permText(p?: Permissions): string {
           p.python_repl ? "可执行代码（沙箱）" : "无代码执行"].join(" · ");
 }
 
-export function MarketView({ org, onEnrolled }: { org: string; onEnrolled: () => void }) {
+export function MarketView({ onChanged }: { onChanged: () => void }) {
   const [packs, setPacks] = useState<PackInfo[]>([]);
-  const [hired, setHired] = useState<Set<string>>(new Set()); // 已在花名册的包名
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [q, setQ] = useState("");
 
-  useEffect(() => { api.market().then((r) => setPacks(r.packs)).catch(() => setPacks([])); }, []);
-  // 已招聘的包在市场页标出来，避免重复招聘只能靠 409 报错发现
-  useEffect(() => {
-    api.roster(org)
-      .then((r) => setHired(new Set(r.members.map((m) => m.name))))
-      .catch(() => setHired(new Set()));
-  }, [org]);
+  const reload = () => api.market().then((r) => setPacks(r.packs)).catch(() => setPacks([]));
+  useEffect(() => { reload(); }, []);
 
-  const enroll = async (p: PackInfo) => {
+  // 市场只做"发现+验货"（§3.5）：下载入库 / 收藏记引用，聘用在「公司」页
+  const download = async (p: PackInfo) => {
     setBusy(p.path); setMsg(null);
     try {
-      const r = await api.enroll(org, p.path);
-      // 后端 note 是中性术语（成员/编制），展示层统一成公司隐喻，不透传
-      setMsg(`已录用 ${r.name}（${r.capabilities.join("、")}）——到「公司」页为其办理入职后开始工作`);
-      setHired((prev) => new Set(prev).add(r.name));
-      onEnrolled();
+      await api.download(p.path);
+      setMsg(`${p.name} 已下载到 Agent 库——到「公司」页的 Agent 库为它聘用实例`);
+      await reload();
+      onChanged();
     } catch (e: any) {
-      setMsg(`招聘失败：${String(e?.message ?? e).slice(0, 140)}`);
+      setMsg(`下载失败：${String(e?.message ?? e).slice(0, 140)}`);
     } finally { setBusy(null); }
+  };
+
+  const toggleStar = async (p: PackInfo) => {
+    if (!p.ref) return;
+    try {
+      await api.star(p.ref, !p.starred);
+      await reload();
+    } catch { /* 收藏失败静默，刷新即真相 */ }
   };
 
   const shown = packs.filter((p) =>
@@ -66,7 +68,7 @@ export function MarketView({ org, onEnrolled }: { org: string; onEnrolled: () =>
 
   return (
     <>
-      <div className="h">人才市场 · 带质检报告的数字员工</div>
+      <div className="h">Agent 市场 · 带质检报告</div>
       <input className="inline-input" placeholder="搜索能力、作者…"
              value={q} onChange={(e) => setQ(e.target.value)} />
       {msg && <div className="card" style={{ padding: "10px 14px", margin: "10px 0" }}>{msg}</div>}
@@ -98,13 +100,17 @@ export function MarketView({ org, onEnrolled }: { org: string; onEnrolled: () =>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
                   <span className="muted">{p.author}</span>
-                  {hired.has(p.name) ? (
-                    <span className="chip ok" style={{ marginLeft: "auto" }}
-                          title="到「公司」页管理该员工">已在花名册</span>
+                  <button className={`btn sm star ${p.starred ? "on" : ""}`} style={{ marginLeft: "auto" }}
+                          title={p.starred ? "取消收藏" : "收藏（只记引用，不占磁盘）"}
+                          onClick={() => toggleStar(p)}>
+                    {p.starred ? "★ 已收藏" : "☆ 收藏"}
+                  </button>
+                  {p.downloaded ? (
+                    <span className="chip ok" title="到「公司」页的 Agent 库聘用">已在库中</span>
                   ) : (
-                    <button className="btn primary sm" style={{ marginLeft: "auto" }}
-                            disabled={busy === p.path} onClick={() => enroll(p)}>
-                      {busy === p.path ? "录用中…" : "招聘"}
+                    <button className="btn primary sm"
+                            disabled={busy === p.path} onClick={() => download(p)}>
+                      {busy === p.path ? "下载中…" : "下载"}
                     </button>
                   )}
                 </div>

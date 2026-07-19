@@ -25,6 +25,9 @@ class MemberSpec(BaseModel):
     """
 
     name: str
+    #: harness 侧运行名（须匹配 ^[A-Za-z0-9-]+$）；显示名可中文（"小张"），
+    #: 二者解耦——名字属于人，slug 属于运行时。空 = 与 name 相同
+    runtime_name: str = ""
     pack_ref: str
     workdir: Path
     capabilities: list[str] = Field(default_factory=list)

@@ -12,7 +12,7 @@ import yaml
 
 from milod.adapter.base import MemberSpec
 from milod.adapter.subprocess_adapter import SubprocessAdapter
-from milod.config.paths import artifacts_dir, org_dir
+from milod.config.paths import artifacts_dir, org_dir, resolve_member_source
 from milod.models import EventType, MiloEvent, TaskEnvelope, TaskState
 from milod.pack.renderer import render
 from milod.secretariat import acceptance
@@ -102,7 +102,7 @@ class Office:
         secrets = {model["secret_env"]: _read_secret(model["secret_env"])}
         member_spec = render(
             org_root=self.root,
-            pack_dir=Path(m["pack"]).expanduser(),
+            pack_dir=resolve_member_source(m),  # agent 引用（库）或旧式 pack 路径
             member_name=m["name"],
             model=model,
             secrets=secrets,

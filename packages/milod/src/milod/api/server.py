@@ -227,7 +227,7 @@ async def get_artifact_file(org: str, task_id: str, name: str) -> dict[str, Any]
 @app.get("/api/orgs/{org}/roster")
 async def roster(org: str) -> dict[str, Any]:
     """编制视图：org.yaml 的成员与限额 + 各成员的档案（能力/权限/模型档位）。"""
-    from milod.config.paths import org_dir
+    from milod.config.paths import org_dir, resolve_member_source
     from milod.pack.renderer import load_manifest
 
     doc = yaml.safe_load((org_dir(org) / "org.yaml").read_text(encoding="utf-8")) or {}
@@ -236,7 +236,9 @@ async def roster(org: str) -> dict[str, Any]:
     members = []
     for m in spec.get("members", []):
         entry = {
-            "name": m["name"], "pack": m["pack"],
+            "name": m["name"],
+            "pack": str(resolve_member_source(m)),
+            "agent": m.get("agent"),  # 模板引用（新格式；旧数据为 None）
             "enrolled": bool(m.get("enrolled", True)),  # False = 待加入或已停职
             "loaded": bool(office and m["name"] in office._specs),  # 实例已在运行
             "busy": bool(office and office.is_busy(m["name"])),
@@ -244,7 +246,7 @@ async def roster(org: str) -> dict[str, Any]:
             "has_workspace": (org_dir(org) / "members" / m["name"]).exists(),
         }
         try:
-            mf = load_manifest(Path(m["pack"]).expanduser())
+            mf = load_manifest(resolve_member_source(m))
             entry |= {
                 "version": mf.get("version"),
                 "author": mf.get("author"),
@@ -264,11 +266,65 @@ async def roster(org: str) -> dict[str, Any]:
     }
 
 
+def _agent_ref(mf: dict) -> str:
+    """模板引用 = name@version（§3.5：实例 pin 版本的锚）。"""
+    return f"{mf['name']}@{mf.get('version') or '0'}"
+
+
+def _load_favorites() -> list[dict]:
+    from milod.config.paths import favorites_file
+
+    f = favorites_file()
+    if not f.exists():
+        return []
+    return (yaml.safe_load(f.read_text(encoding="utf-8")) or {}).get("favorites", [])
+
+
+def _save_favorites(items: list[dict]) -> None:
+    from milod.config.paths import favorites_file
+
+    f = favorites_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(yaml.safe_dump({"favorites": items}, allow_unicode=True, sort_keys=False),
+                 encoding="utf-8")
+
+
+def _library_refs() -> set[str]:
+    from milod.config.paths import library_dir
+
+    root = library_dir()
+    if not root.exists():
+        return set()
+    return {d.name for d in root.iterdir() if d.is_dir() and (d / "manifest.yaml").exists()}
+
+
+def _refs_in_use() -> dict[str, list[str]]:
+    """哪些模板正被哪些公司的实例引用（被引用的模板禁止移除）。"""
+    from milod.config.paths import milo_home
+
+    used: dict[str, list[str]] = {}
+    root = milo_home() / "orgs"
+    if not root.exists():
+        return used
+    for d in root.iterdir():
+        f = d / "org.yaml"
+        if not f.is_file():
+            continue
+        try:
+            doc = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        except Exception:  # noqa: BLE001
+            continue
+        for m in (doc.get("spec") or {}).get("members", []):
+            if m.get("agent"):
+                used.setdefault(str(m["agent"]), []).append(d.name)
+    return used
+
+
 @app.get("/api/market")
 async def market() -> dict[str, Any]:
-    """人才市场 v0：扫描本地包目录（Registry 服务端推迟到 M4）。
+    """Agent 市场 v0：扫描本地源目录（Registry 服务端推迟到 M4）。
 
-    包目录来自环境变量 MILO_PACKS（冒号分隔），缺省为 ~/.milo/packs。
+    职责收窄为"发现 + 验货"（§3.5）：卡片动作只有 收藏/下载，不直接产生雇佣。
     """
     import os
 
@@ -276,6 +332,8 @@ async def market() -> dict[str, Any]:
     from milod.evals.smoke import load_report
     from milod.pack.renderer import load_manifest
 
+    downloaded = _library_refs()
+    starred = {f["ref"] for f in _load_favorites()}
     roots = [Path(p).expanduser() for p in
              (os.environ.get("MILO_PACKS") or str(milo_home() / "packs")).split(":") if p]
     packs = []
@@ -291,8 +349,10 @@ async def market() -> dict[str, Any]:
                 packs.append({"path": str(d), "name": d.name, "error": str(e)})
                 continue
             report = load_report(mf["name"], mf.get("version"))
+            ref = _agent_ref(mf)
             packs.append({
                 "path": str(d),
+                "ref": ref,
                 "name": mf["name"],
                 "version": mf.get("version"),
                 "author": mf.get("author"),
@@ -302,6 +362,8 @@ async def market() -> dict[str, Any]:
                 "permissions": mf.get("permissions", {}),
                 "model_requirements": mf.get("model_requirements", {}),
                 "eval": mf.get("eval", {}),
+                "downloaded": ref in downloaded,
+                "starred": ref in starred,
                 # 自报（manifest.eval）与实测（本机 milo eval 报告）分开呈现——
                 # 信任来自复跑，不来自作者声明
                 "eval_report": report and {
@@ -316,42 +378,168 @@ async def market() -> dict[str, Any]:
     return {"packs": packs}
 
 
+# ---- Agent 库（用户全局资产，跨公司共享）----------------------------------
+class DownloadRequest(BaseModel):
+    source_path: str  # v0：从本地源目录拷入库；Registry 上线后换远端拉取，接口不变
+
+
+@app.get("/api/library")
+async def list_library() -> dict[str, Any]:
+    from milod.config.paths import library_dir
+    from milod.pack.renderer import load_manifest
+
+    used = _refs_in_use()
+    items = []
+    root = library_dir()
+    if root.exists():
+        for d in sorted(p for p in root.iterdir() if p.is_dir()):
+            if not (d / "manifest.yaml").exists():
+                continue
+            try:
+                mf = load_manifest(d)
+            except Exception as e:  # noqa: BLE001
+                items.append({"ref": d.name, "error": str(e)})
+                continue
+            items.append({
+                "ref": d.name,
+                "name": mf["name"],
+                "version": mf.get("version"),
+                "description": mf.get("description"),
+                "capabilities": [c["id"] for c in mf.get("capabilities", [])],
+                "permissions": mf.get("permissions", {}),
+                "used_by": used.get(d.name, []),  # 引用它的公司（禁删依据）
+            })
+    return {"library": items}
+
+
+@app.post("/api/library")
+async def download_to_library(body: DownloadRequest) -> dict[str, Any]:
+    """「下载」：把模板拷入 Agent 库，成为可聘用的资产。"""
+    import shutil
+
+    from milod.config.paths import library_dir
+    from milod.pack.renderer import load_manifest
+
+    src = Path(body.source_path).expanduser().resolve()
+    try:
+        mf = load_manifest(src)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"MiloPack 无效：{e}") from e
+    ref = _agent_ref(mf)
+    dest = library_dir() / ref
+    if dest.exists():
+        return {"ref": ref, "status": "exists"}
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, dest)
+    return {"ref": ref, "status": "downloaded"}
+
+
+@app.delete("/api/library/{ref}")
+async def remove_from_library(ref: str) -> dict[str, Any]:
+    """移除下载。被实例引用的模板禁删——实例重启需要模板源（§3.5）。"""
+    import shutil
+
+    from milod.config.paths import library_dir
+
+    used = _refs_in_use().get(ref, [])
+    if used:
+        raise HTTPException(409, f"模板 {ref} 正被公司 {'、'.join(used)} 的员工引用，不能移除")
+    p = library_dir() / Path(ref).name
+    if not p.is_dir():
+        raise HTTPException(404, f"库中没有 {ref}")
+    shutil.rmtree(p)
+    return {"ref": ref, "status": "removed"}
+
+
+# ---- 收藏（只记引用，不占磁盘）--------------------------------------------
+@app.get("/api/favorites")
+async def list_favorites() -> dict[str, Any]:
+    return {"favorites": _load_favorites()}
+
+
+@app.put("/api/favorites/{ref}")
+async def add_favorite(ref: str) -> dict[str, Any]:
+    items = _load_favorites()
+    if not any(f["ref"] == ref for f in items):
+        items.append({"ref": ref})
+        _save_favorites(items)
+    return {"ref": ref, "starred": True}
+
+
+@app.delete("/api/favorites/{ref}")
+async def remove_favorite(ref: str) -> dict[str, Any]:
+    items = [f for f in _load_favorites() if f["ref"] != ref]
+    _save_favorites(items)
+    return {"ref": ref, "starred": False}
+
+
 class EnrollRequest(BaseModel):
-    pack: str            # 包目录路径（v0；Registry 引用推迟到 M4）
-    name: str | None = None
+    """聘用 = 从 Agent 库模板 new 一个具名实例（§3.5）。
+
+    新调用：{agent: "py-dev@0.1.0", name: "小张", activate: true}
+    兼容旧调用：{pack: <路径>}（CLI/旧脚本仍可用，名字缺省用包名）。
+    """
+
+    agent: str | None = None    # Agent 库模板引用（推荐）
+    pack: str | None = None     # 旧式包路径（兼容）
+    name: str | None = None     # 实例名：走 agent 引用时必填，公司内唯一
+    activate: bool = False      # 立即入职（聘用即拉起实例）
 
 
 @app.post("/api/orgs/{org}/members")
 async def enroll_member(org: str, body: EnrollRequest) -> dict[str, Any]:
-    """招募成员 = 写入编制（人事红线：只有组长能发起，秘书长只执行）。
+    """聘用数字员工（人事红线：只有老板能发起，秘书长只执行）。
 
-    两段式：招募只落编制（enrolled=False，待加入），组长在组织页点
-    「加入组织」（activate）后才真正分配实例运行——招募≈签 offer，
-    加入≈报到，实例化这一步同样只能由用户触发。
+    模板（Agent）不可变，实例（member）具名——同模板可聘多个实例，
+    各有独立工作区与记忆。activate=false 时停在"待入职"。
     """
-    from milod.config.paths import org_dir
+    from milod.config.paths import library_dir, org_dir
     from milod.pack.renderer import load_manifest
 
-    pack = Path(body.pack).expanduser().resolve()
+    if body.agent:
+        src = library_dir() / Path(body.agent).name
+        if not src.is_dir():
+            raise HTTPException(404, f"Agent 库中没有 {body.agent}——先到市场下载")
+        record_key = {"agent": Path(body.agent).name}
+    elif body.pack:
+        src = Path(body.pack).expanduser().resolve()
+        record_key = {"pack": str(src)}
+    else:
+        raise HTTPException(422, "需要 agent（模板引用）或 pack（路径）之一")
     try:
-        mf = load_manifest(pack)
+        mf = load_manifest(src)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, f"MiloPack 无效：{e}") from e
+
+    name = (body.name or mf["name"]).strip()
+    if body.agent and not (body.name or "").strip():
+        raise HTTPException(422, "聘用必须给实例起名（§3.5：名字属于这个人，不是岗位）")
+    if not (1 <= len(name) <= 20):
+        raise HTTPException(422, "实例名长度需在 1–20 字符")
 
     f = org_dir(org) / "org.yaml"
     doc = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
     members = doc.setdefault("spec", {}).setdefault("members", [])
-    name = body.name or mf["name"]
     if any(m["name"] == name for m in members):
-        raise HTTPException(409, f"成员 {name} 已在编制中")
+        raise HTTPException(409, f"实例名 {name} 已被占用")
     limit = int((doc["spec"].get("limits") or {}).get("maxParallelMembers", 5))
     if len(members) >= limit:
         raise HTTPException(409, f"已达编制上限 {limit}（监督幅度护栏）")
 
-    members.append({"name": name, "pack": str(pack), "enrolled": False})
+    members.append({"name": name, **record_key, "enrolled": bool(body.activate)})
     f.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    return {"name": name, "capabilities": [c["id"] for c in mf.get("capabilities", [])],
-            "note": "已写入编制（待加入）；到「组织」页点「加入组织」后开始工作"}
+
+    if body.activate:
+        office = await hub.office(org)
+        try:
+            await office.enroll_member(name)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(500, f"{name} 实例启动失败：{e}") from e
+    return {"name": name, "agent": record_key.get("agent"),
+            "capabilities": [c["id"] for c in mf.get("capabilities", [])],
+            "status": "active" if body.activate else "pending",
+            "note": ("已入职，实例运行中" if body.activate
+                     else "已聘用（待入职）；到「公司」页点「入职」后开始工作")}
 
 
 @app.post("/api/orgs/{org}/members/{name}/activate")

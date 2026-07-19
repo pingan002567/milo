@@ -58,7 +58,9 @@ class SubprocessAdapter(MemberAdapter):
             env=env,
         )
         self._reader = asyncio.create_task(self._read_loop())
-        await self._call("enroll", {"member": spec.name, "workdir": str(spec.workdir)})
+        await self._call("enroll", {"member": spec.name,
+                                    "agent_name": spec.runtime_name or spec.name,
+                                    "workdir": str(spec.workdir)})
 
     async def dismiss(self) -> None:
         if self._proc and self._proc.returncode is None:

@@ -27,7 +27,8 @@ def _emit(obj) -> None:
 class Worker:
     def __init__(self) -> None:
         self._client: Any = None
-        self._member: str = ""
+        self._member: str = ""   # 显示名（可中文，用于事件 actor）
+        self._agent: str = ""    # harness 运行名（ASCII slug）
         self._threads: dict[str, str] = {}
 
     # ---- 方法 ----------------------------------------------------------
@@ -35,11 +36,14 @@ class Worker:
         from deerflow.client import DeerFlowClient  # 延迟导入：加速非 enroll 路径
 
         self._member = params["member"]
+        # harness agent 名须 ASCII（^[A-Za-z0-9-]+$）；显示名（可中文）只用于事件 actor。
+        # 线程 id 也用 slug——它会进文件路径与校验，不冒中文的险
+        self._agent = params.get("agent_name") or self._member
         workdir = Path(params["workdir"])
         checkpointer = self._make_checkpointer(workdir)
         self._client = DeerFlowClient(
             config_path=str(workdir / "config.yaml"),
-            agent_name=self._member,
+            agent_name=self._agent,
             checkpointer=checkpointer,
         )
         return {"member": self._member, "checkpointer": checkpointer is not None}
@@ -47,7 +51,7 @@ class Worker:
     def assign(self, params: dict) -> dict:
         task_id = params["task_id"]
         prompt = params["prompt"]
-        thread_id = self._threads.setdefault(task_id, f"{self._member}-{task_id}")
+        thread_id = self._threads.setdefault(task_id, f"{self._agent}-{task_id}")
         self._inject_inputs(thread_id, params.get("inputs") or [])
         self._pump(task_id, prompt, thread_id)
         return {"task_id": task_id, "thread_id": thread_id}
@@ -78,13 +82,13 @@ class Worker:
     def resume(self, params: dict) -> dict:
         """组长答复后恢复被 ask_clarification 中断的任务（同 thread + checkpointer）。"""
         task_id = params["task_id"]
-        thread_id = self._threads.get(task_id, f"{self._member}-{task_id}")
+        thread_id = self._threads.get(task_id, f"{self._agent}-{task_id}")
         self._pump(task_id, params["answer"], thread_id)
         return {"task_id": task_id, "resumed": True}
 
     def deliver(self, params: dict) -> dict:
         task_id = params["task_id"]
-        thread_id = self._threads.get(task_id, f"{self._member}-{task_id}")
+        thread_id = self._threads.get(task_id, f"{self._agent}-{task_id}")
         out: list[dict] = []
         for rel in params.get("artifacts", []):
             # get_artifact 只认 /mnt/user-data/... 虚拟路径；信封里的产物是裸文件名，

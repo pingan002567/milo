@@ -231,9 +231,7 @@ export default function App() {
 
         {screen === "org" && <OrgView org={ORG} onChanged={refreshLists} />}
 
-        {screen === "market" && (
-          <MarketView org={ORG} onEnrolled={refreshLists} />
-        )}
+        {screen === "market" && <MarketView onChanged={refreshLists} />}
 
         {screen === "roster" && <RosterView org={ORG} />}
 

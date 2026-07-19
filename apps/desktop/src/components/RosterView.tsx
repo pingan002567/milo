@@ -50,7 +50,9 @@ export function RosterView({ org }: { org: string }) {
                 {" · "}{m.permissions?.filesystem === "readonly" ? "文件只读" : "文件读写"}
                 {" · "}{m.permissions?.python_repl ? "可执行代码" : "无代码执行"}
               </div>
-              <div className="muted mono" style={{ fontSize: 11, marginTop: 4 }}>{m.pack}</div>
+              <div className="muted mono" style={{ fontSize: 11, marginTop: 4 }}>
+                {m.agent ? `模板 ${m.agent}（Agent 库）` : m.pack}
+              </div>
             </>
           )}
         </div>

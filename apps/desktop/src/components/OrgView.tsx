@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type RosterMember } from "../lib/api";
+import { api, type LibraryItem, type RosterMember } from "../lib/api";
 
 /**
- * 公司页 = 人事中心。数字员工生命周期（人事红线：每一步都只能由老板在这里发起）。
- * 前端隐喻是「一人公司」：招聘 → 入职 → 在职 → 停职/复岗 → 辞退；
- * 后端保持中性术语（member/enroll/dismiss），此处只做展示层映射：
+ * 公司页 = 人事中心。三层模型（§3.5）：Agent 模板（库，全局资产）→ 聘用起名
+ * new 出具名实例 → 数字员工生命周期（人事红线：每一步只能由老板发起）：
  *
- *   市场「招聘」→ 待入职 →「入职」→ 在职（空闲/工作中）
- *                    │                  │
- *                    │「撤销录用」      │「停职」（工作中不可）→ 停职中（记忆保留）
- *                    ▼                  │「辞退」（工作中需强制确认）  │「复岗」/「辞退」
- *                  移除                 ▼                             ▼
- *                                辞退：成果归公司，过程随实例销毁
+ *   Agent 库「聘用」（起名+可选立即入职）→ 待入职 →「入职」→ 在职（空闲/工作中）
+ *                        │                             │
+ *                        │「撤销录用」                 │「停职」（工作中不可）→ 停职中（记忆保留）
+ *                        ▼                             │「辞退」（工作中需强制确认）│「复岗」/「辞退」
+ *                      移除                            ▼                            ▼
+ *                                          辞退：成果归公司，过程随实例销毁；模板留在库中
  */
 type Phase = "pending" | "suspended" | "idle" | "busy" | "starting" | "error";
 
@@ -31,17 +30,73 @@ const PHASE_LABEL: Record<Phase, [string, string]> = {
   error: ["包异常", "crit"],
 };
 
+/** 聘用表单：模板 new 实例必须起名（§3.5：名字属于这个人，不是岗位）。 */
+function HireForm({ suggested, busy, onHire, onCancel }: {
+  suggested: string; busy: boolean;
+  onHire: (name: string, activate: boolean) => void; onCancel: () => void;
+}) {
+  const [name, setName] = useState(suggested);
+  const [activate, setActivate] = useState(true);
+  return (
+    <div className="hireform">
+      <input className="setting-input" style={{ flex: 1, height: 30 }} autoFocus
+             placeholder="实例名（公司内唯一）" value={name}
+             onChange={(e) => setName(e.target.value)}
+             onKeyDown={(e) => e.key === "Enter" && name.trim() && onHire(name.trim(), activate)} />
+      <label className="muted" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, whiteSpace: "nowrap" }}>
+        <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
+        立即入职
+      </label>
+      <button className="btn primary sm" disabled={busy || !name.trim()}
+              onClick={() => onHire(name.trim(), activate)}>
+        {busy ? "聘用中…" : "确认聘用"}
+      </button>
+      <button className="btn sm" onClick={onCancel}>取消</button>
+    </div>
+  );
+}
+
 export function OrgView({ org, onChanged }: { org: string; onChanged: () => void }) {
   const [members, setMembers] = useState<RosterMember[]>([]);
+  const [library, setLibrary] = useState<LibraryItem[]>([]);
+  const [hiring, setHiring] = useState<string | null>(null);  // 正在填聘用表单的模板 ref
   const [busy, setBusy] = useState<string | null>(null); // 正在执行人事动作的员工
   const [msg, setMsg] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    const r = await api.roster(org).catch(() => null);
+    const [r, l] = await Promise.all([
+      api.roster(org).catch(() => null),
+      api.library().catch(() => null),
+    ]);
     setMembers(r?.members ?? []);
+    setLibrary(l?.library ?? []);
   }, [org]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  /** 默认实例名：模板名 或 模板名-N（同模板第 N 个实例）。 */
+  const suggestName = (item: LibraryItem) => {
+    const base = item.name ?? item.ref.split("@")[0];
+    const taken = new Set(members.map((m) => m.name));
+    if (!taken.has(base)) return base;
+    for (let i = 2; i < 100; i++) if (!taken.has(`${base}-${i}`)) return `${base}-${i}`;
+    return `${base}-x`;
+  };
+
+  const hire = async (item: LibraryItem, name: string, activate: boolean) => {
+    setBusy(item.ref); setMsg(null);
+    try {
+      const r = await api.hire(org, item.ref, name, activate);
+      setMsg(`已聘用 ${r.name}（${item.name ?? item.ref}）——${activate ? "已入职，实例运行中" : "待入职"}`);
+      setHiring(null);
+    } catch (e: any) {
+      setMsg(`聘用失败：${String(e?.message ?? e).slice(0, 140)}`);
+    } finally {
+      setBusy(null);
+      await reload();
+      onChanged();
+    }
+  };
 
   const act = async (name: string, fn: () => Promise<unknown>, done: string) => {
     setBusy(name); setMsg(null);
@@ -91,6 +146,7 @@ export function OrgView({ org, onChanged }: { org: string; onChanged: () => void
                           borderBottom: "1px dashed var(--line)" }}>
               <div style={{ minWidth: 0 }}>
                 <b>{m.name}</b>
+                {m.agent && <span className="mono muted" style={{ fontSize: 10.5, marginLeft: 6 }}>{m.agent}</span>}
                 <div className="muted" style={{ fontSize: 12 }}>
                   {(m.capabilities ?? []).join("、") || m.error || "—"}
                 </div>
@@ -135,13 +191,56 @@ export function OrgView({ org, onChanged }: { org: string; onChanged: () => void
           );
         })}
         {members.length === 0 && (
-          <div className="muted">还没有数字员工——到「人才市场」页招聘第一名员工。</div>
+          <div className="muted">还没有数字员工——从下方 Agent 库聘用，或先到「Agent 市场」下载模板。</div>
         )}
 
         <div className="muted" style={{ marginTop: 10 }}>
           一人公司：你 + 秘书长 + 数字员工 · 并行 ≤5 · 员工间无直连，产物经 artifact 交接。
-          人事动作只能由你发起：招聘 → 入职 → 停职（可复岗）→ 辞退（成果归公司，过程随实例销毁）。
+          人事动作只能由你发起：聘用（起名）→ 入职 → 停职（可复岗）→ 辞退（成果归公司，过程随实例销毁）。
         </div>
+      </div>
+
+      <div className="h">Agent 库 · 可聘用的模板（全局资产，跨公司共享）</div>
+      <div className="card" style={{ padding: 18, maxWidth: 680 }}>
+        {library.map((item) => (
+          <div key={item.ref} style={{ padding: "8px 0", borderBottom: "1px dashed var(--line)" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ minWidth: 0 }}>
+                <b>{item.name ?? item.ref}</b>
+                <span className="mono muted" style={{ fontSize: 10.5, marginLeft: 6 }}>{item.ref}</span>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {item.error ? `模板损坏：${item.error}` : (item.capabilities ?? []).join("、") || item.description || "—"}
+                </div>
+              </div>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
+                {(item.used_by ?? []).length > 0 && (
+                  <span className="chip" title={`被引用：${(item.used_by ?? []).join("、")}`}>
+                    {(item.used_by ?? []).length} 实例在用
+                  </span>
+                )}
+                {!item.error && hiring !== item.ref && (
+                  <button className="btn primary sm" onClick={() => setHiring(item.ref)}>聘用</button>
+                )}
+                <button className="btn sm crit" disabled={(item.used_by ?? []).length > 0}
+                        title={(item.used_by ?? []).length > 0 ? "被实例引用的模板不能移除" : "从库中移除下载"}
+                        onClick={async () => {
+                          if (!window.confirm(`从 Agent 库移除 ${item.ref}？`)) return;
+                          try { await api.removeFromLibrary(item.ref); } catch (e: any) {
+                            setMsg(`移除失败：${String(e?.message ?? e).slice(0, 120)}`);
+                          }
+                          await reload();
+                        }}>移除</button>
+              </div>
+            </div>
+            {hiring === item.ref && (
+              <HireForm suggested={suggestName(item)} busy={busy === item.ref}
+                        onHire={(n, a) => hire(item, n, a)} onCancel={() => setHiring(null)} />
+            )}
+          </div>
+        ))}
+        {library.length === 0 && (
+          <div className="muted">库是空的——到「Agent 市场」下载模板后即可在此聘用。</div>
+        )}
       </div>
     </>
   );

@@ -358,3 +358,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 .md .md-h3, .md .md-h4 { font-size: 13px; }
 .md .md-quote { border-left: 3px solid var(--line); padding-left: 10px; color: var(--ink-3); margin: 4px 0; }
 .md .md-hr { border: none; border-top: 1px solid var(--line); margin: 8px 0; }
+
+/* ─── Agent 库聘用表单 / 市场收藏 ─── */
+.hireform { display: flex; gap: 8px; align-items: center; margin-top: 8px;
+  padding: 8px 10px; background: var(--panel-2); border-radius: 8px; }
+.btn.star.on { color: var(--amber); border-color: var(--amber-soft); }

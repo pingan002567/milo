@@ -13,7 +13,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV="$ROOT/spikes/01-escalate-events/.venv/bin/python"
 export PYTHONPATH="$ROOT/packages/milod/src"
 export MILO_HOME="${MILO_HOME:-$HOME/.milo}"
-export MILO_PACKS="${MILO_PACKS:-$MILO_HOME/packs}"
+export MILO_PACKS="${MILO_PACKS:-$ROOT/packs:$MILO_HOME/packs}"
 PORT="${MILO_PORT:-8899}"
 
 stop() {
@@ -31,10 +31,11 @@ if [[ ! -f "$MILO_HOME/orgs/demo/org.yaml" ]]; then
   # 注意：全角括号会被 shell 当作变量名的一部分，务必用 ${} 包裹
   echo "▸ 初始化组织 demo (${MILO_HOME})"
   "$VENV" "$ROOT/packages/cli/milo_cli.py" init demo
-  mkdir -p "$MILO_PACKS"
-  # 附带一个示例包，便于在「市场」里直接招募
-  [[ -d "$MILO_PACKS/lit-scout" ]] || cp -r "$ROOT/spikes/02-enroll-render/pack" "$MILO_PACKS/lit-scout"
-  echo "  示例包已放入 $MILO_PACKS/lit-scout —— 可在「市场」页招募"
+  # MILO_PACKS 是冒号分隔的多源列表；示例包放进用户级源目录
+  USER_PACKS="$MILO_HOME/packs"
+  mkdir -p "$USER_PACKS"
+  [[ -d "$USER_PACKS/lit-scout" ]] || cp -r "$ROOT/spikes/02-enroll-render/pack" "$USER_PACKS/lit-scout"
+  echo "  示例包已放入 $USER_PACKS/lit-scout —— 连同仓库 packs/ 一起出现在「Agent 市场」"
 fi
 
 stop

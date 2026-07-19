@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -74,9 +75,17 @@ def render(
     """
     manifest = load_manifest(pack_dir)
     name = member_name or manifest["name"]
+    # harness 的 agent 名只接受 ^[A-Za-z0-9-]+$；实例显示名可中文（"小张"）——
+    # 生成确定性 slug 供运行时使用，工作区目录仍按显示名（一人一目录）
+    if re.fullmatch(r"[A-Za-z0-9-]+", name):
+        slug = name
+    else:
+        import hashlib
+
+        slug = f"{manifest['name']}-{hashlib.md5(name.encode()).hexdigest()[:6]}"
     workdir = org_root / "members" / name
     home = workdir / "home"
-    agent_dir = home / "agents" / name
+    agent_dir = home / "agents" / slug
     skills_root = home / "skills"
     agent_dir.mkdir(parents=True, exist_ok=True)
     (skills_root / "custom").mkdir(parents=True, exist_ok=True)
@@ -101,7 +110,7 @@ def render(
     (agent_dir / "config.yaml").write_text(
         yaml.safe_dump(
             {
-                "name": name,
+                "name": slug,  # harness 校验此名；显示名走 MemberSpec.name
                 "description": manifest.get("description", ""),
                 "model": model["name"],
                 "skills": skill_names,  # 白名单；[] = 禁用
@@ -146,6 +155,7 @@ def render(
 
     return MemberSpec(
         name=name,
+        runtime_name=slug,
         pack_ref=str(pack_dir),
         workdir=workdir,
         capabilities=[c["id"] for c in manifest.get("capabilities", [])],

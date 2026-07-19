@@ -62,6 +62,12 @@ export interface OrgSummary { org: string; title: string; members: number; open:
 export interface Permissions { network?: string[]; filesystem?: string; python_repl?: boolean }
 export interface PackInfo {
   path: string; name: string; version?: string; author?: string; description?: string;
+  /** 模板引用 name@version（§3.5 三层模型的锚） */
+  ref?: string;
+  /** 已下载进 Agent 库 */
+  downloaded?: boolean;
+  /** 已收藏（只记引用，不占磁盘） */
+  starred?: boolean;
   capabilities?: { id: string; description: string }[];
   permissions?: Permissions; model_requirements?: { min_tier?: string; context_window?: string };
   eval?: { suite?: string; min_score?: number };
@@ -72,8 +78,19 @@ export interface PackInfo {
   } | null;
   error?: string;
 }
+export interface LibraryItem {
+  ref: string; name?: string; version?: string; description?: string;
+  capabilities?: string[]; permissions?: Permissions;
+  /** 引用该模板的公司（非空则禁删） */
+  used_by?: string[];
+  error?: string;
+}
+
 export interface RosterMember {
-  name: string; pack: string; version?: string; author?: string; description?: string;
+  name: string; pack: string;
+  /** 模板引用（新格式；旧数据无） */
+  agent?: string | null;
+  version?: string; author?: string; description?: string;
   capabilities?: string[]; permissions?: Permissions;
   model_requirements?: { min_tier?: string }; error?: string;
   /** false = 待加入或已停职（组织页点「加入组织/复岗」后才分配实例运行） */
@@ -104,11 +121,27 @@ export const api = {
 
   market: (): Promise<{ packs: PackInfo[] }> => fetch(`/api/market`).then(j),
 
-  enroll: (org: string, pack: string, name?: string) =>
+  /** 聘用：从 Agent 库模板 new 一个具名实例（activate=true 立即入职）。 */
+  hire: (org: string, agent: string, name: string, activate: boolean) =>
     fetch(`/api/orgs/${org}/members`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pack, name: name ?? null }),
-    }).then(j) as Promise<{ name: string; capabilities: string[]; note: string }>,
+      body: JSON.stringify({ agent, name, activate }),
+    }).then(j) as Promise<{ name: string; capabilities: string[]; status: string; note: string }>,
+
+  library: (): Promise<{ library: LibraryItem[] }> => fetch(`/api/library`).then(j),
+
+  download: (sourcePath: string) =>
+    fetch(`/api/library`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_path: sourcePath }),
+    }).then(j) as Promise<{ ref: string; status: string }>,
+
+  removeFromLibrary: (ref: string) =>
+    fetch(`/api/library/${encodeURIComponent(ref)}`, { method: "DELETE" }).then(j),
+
+  star: (ref: string, on: boolean) =>
+    fetch(`/api/favorites/${encodeURIComponent(ref)}`, { method: on ? "PUT" : "DELETE" })
+      .then(j) as Promise<{ ref: string; starred: boolean }>,
 
   bindings: (org: string) =>
     fetch(`/api/orgs/${org}/bindings`).then(j) as Promise<{
