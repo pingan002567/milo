@@ -106,6 +106,10 @@ class Office:
             member_name=m["name"],
             model=model,
             secrets=secrets,
+            # 实例自持配置（§3.5 修正）：能力/权限/描述以 org.yaml 快照为准，
+            # 模板只是出厂来源；快照在则模板缺失也能拉起
+            snapshot={k: m[k] for k in ("capabilities", "permissions", "description",
+                                        "template_name", "slug") if k in m},
         )
         adapter = SubprocessAdapter()
         await adapter.enroll(member_spec)

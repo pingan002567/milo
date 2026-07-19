@@ -69,22 +69,30 @@ def render(
     secrets: dict[str, str] | None = None,
     extra_tools: list[dict[str, Any]] | None = None,  # 追加工具（秘书的 Milo Tools）
     workdir: Path | None = None,                      # 工作区覆盖（秘书住 orgs/<org>/secretary/）
+    snapshot: dict[str, Any] | None = None,           # 实例自持配置（§3.5 修正：实例与模板脱钩）
 ) -> MemberSpec:
     """渲染一个成员的私有工作区，返回可直接交给 adapter.enroll 的 MemberSpec。
 
     model: {"name","api_base","provider","model"} —— 来自 bindings.yaml 的档位绑定。
     secrets: 只含该成员所需凭证（最小注入），值不写入任何文件。
-    """
-    manifest = load_manifest(pack_dir)
-    name = member_name or manifest["name"]
-    # harness 的 agent 名只接受 ^[A-Za-z0-9-]+$；实例显示名可中文（"小张"）——
-    # 生成确定性 slug 供运行时使用，工作区目录仍按显示名（一人一目录）
-    if re.fullmatch(r"[A-Za-z0-9-]+", name):
-        slug = name
-    else:
-        import hashlib
 
-        slug = f"{manifest['name']}-{hashlib.md5(name.encode()).hexdigest()[:6]}"
+    snapshot（§3.5 修正）：实例化即拷贝，生成后实例与模板脱钩——
+    capabilities/permissions/description 以 org.yaml 里的实例快照为准（可编辑）；
+    工作区已有 SOUL.md/skills 时不再从模板覆盖（保护用户对实例的修改）；
+    快照齐全且工作区已材料化时，模板缺失也能照常拉起。
+    """
+    snapshot = snapshot or {}
+    try:
+        manifest = load_manifest(pack_dir)
+    except Exception:
+        # 模板可能已从库中移除——实例自持配置时这不是错误
+        if not snapshot:
+            raise
+        manifest = {"name": snapshot.get("template_name") or (member_name or "member")}
+    name = member_name or manifest["name"]
+    # slug 在招募时固化进名册（snapshot.slug）——改名不换 slug，
+    # harness 目录/人设/记忆全部跟人走；缺失时按旧规则推导（兼容旧数据）
+    slug = snapshot.get("slug") or derive_slug(name, str(manifest.get("name") or "member"))
     workdir = workdir or (org_root / "members" / name)
     home = workdir / "home"
     agent_dir = home / "agents" / slug
@@ -92,28 +100,39 @@ def render(
     agent_dir.mkdir(parents=True, exist_ok=True)
     (skills_root / "custom").mkdir(parents=True, exist_ok=True)
 
-    # 1) persona -> SOUL.md（人设 + 升级契约由包内正文承载）
-    persona = pack_dir / "persona" / "system.md"
-    if not persona.exists():
-        raise PackError(f"MiloPack 缺少 persona/system.md: {pack_dir}")
-    (agent_dir / "SOUL.md").write_text(persona.read_text(encoding="utf-8"), encoding="utf-8")
+    # 1) persona -> SOUL.md：只在首次材料化时从模板拷贝——
+    # 之后 SOUL.md 归实例所有（用户可改人设），绝不被模板覆盖
+    soul = agent_dir / "SOUL.md"
+    if not soul.exists():
+        persona = pack_dir / "persona" / "system.md"
+        if not persona.exists():
+            raise PackError(f"MiloPack 缺少 persona/system.md: {pack_dir}")
+        soul.write_text(persona.read_text(encoding="utf-8"), encoding="utf-8")
 
-    # 2) skills 原样透传 + 白名单
+    # 2) skills：同样只做首次拷贝（实例自持）
     skill_names: list[str] = []
-    src_skills = pack_dir / "skills"
-    if src_skills.exists():
+    src_skills = pack_dir / "skills" if pack_dir else None
+    if src_skills and src_skills.exists():
         for s in sorted(p for p in src_skills.iterdir() if p.is_dir()):
             dst = skills_root / "custom" / s.name
-            if dst.exists():
-                shutil.rmtree(dst)
-            shutil.copytree(s, dst)
+            if not dst.exists():
+                shutil.copytree(s, dst)
             skill_names.append(s.name)
+    else:  # 模板不在了：以工作区现有 skills 为准
+        existing = skills_root / "custom"
+        skill_names = sorted(p.name for p in existing.iterdir() if p.is_dir()) \
+            if existing.exists() else []
+
+    # 实例快照优先（可编辑），模板 manifest 只是首次的出厂缺省
+    description = snapshot.get("description") or manifest.get("description", "")
+    capabilities = snapshot.get("capabilities") \
+        or [c["id"] for c in manifest.get("capabilities", [])]
 
     (agent_dir / "config.yaml").write_text(
         yaml.safe_dump(
             {
                 "name": slug,  # harness 校验此名；显示名走 MemberSpec.name
-                "description": manifest.get("description", ""),
+                "description": description,
                 "model": model["name"],
                 "skills": skill_names,  # 白名单；[] = 禁用
             },
@@ -124,7 +143,7 @@ def render(
     )
 
     # 3) 运行时 config.yaml（permissions 收敛在此落地）
-    perms = manifest.get("permissions", {}) or {}
+    perms = snapshot.get("permissions") or manifest.get("permissions", {}) or {}
     provider = model.get("provider", "openai")
     cfg: dict[str, Any] = {
         "config_version": 26,
@@ -160,10 +179,19 @@ def render(
         runtime_name=slug,
         pack_ref=str(pack_dir),
         workdir=workdir,
-        capabilities=[c["id"] for c in manifest.get("capabilities", [])],
+        capabilities=capabilities,
         model_bindings={"default": model["name"]},
         secrets=dict(secrets or {}),
     )
+
+
+def derive_slug(name: str, template_base: str) -> str:
+    """harness agent 名只接受 ^[A-Za-z0-9-]+$；中文显示名 → 确定性 slug。"""
+    if re.fullmatch(r"[A-Za-z0-9-]+", name):
+        return name
+    import hashlib
+
+    return f"{template_base}-{hashlib.md5(name.encode()).hexdigest()[:6]}"
 
 
 def _tools_for(perms: dict) -> list[dict]:

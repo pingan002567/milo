@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type LibraryItem, type RosterMember } from "../lib/api";
+import { MemberModal } from "./MemberModal";
 
 /**
  * 团队页 = 成员管理中心。三层模型（§3.5）：Agent 模板（库，全局资产）→ 招募起名
@@ -61,6 +62,7 @@ export function OrgView({ org, onChanged }: { org: string; onChanged: () => void
   const [library, setLibrary] = useState<LibraryItem[]>([]);
   const [hiring, setHiring] = useState<string | null>(null);  // 正在填招募表单的模板 ref
   const [busy, setBusy] = useState<string | null>(null); // 正在执行管理动作的成员
+  const [detail, setDetail] = useState<RosterMember | null>(null); // 成员详情弹窗
   const [msg, setMsg] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -144,7 +146,8 @@ export function OrgView({ org, onChanged }: { org: string; onChanged: () => void
             <div key={m.name} className="orgrow"
                  style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0",
                           borderBottom: "1px dashed var(--line)" }}>
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, cursor: "pointer" }} title="点击查看/编辑该成员"
+                   onClick={() => setDetail(m)}>
                 <b>{m.name}</b>
                 {m.agent && <span className="mono muted" style={{ fontSize: 10.5, marginLeft: 6 }}>{m.agent}</span>}
                 <div className="muted" style={{ fontSize: 12 }}>
@@ -242,6 +245,12 @@ export function OrgView({ org, onChanged }: { org: string; onChanged: () => void
           <div className="muted">库是空的——到「Agent 市场」下载模板后即可在此聘用。</div>
         )}
       </div>
+
+      {detail && (
+        <MemberModal org={org} member={detail}
+                     onClose={() => setDetail(null)}
+                     onSaved={async () => { await reload(); onChanged(); }} />
+      )}
     </>
   );
 }

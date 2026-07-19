@@ -265,16 +265,20 @@ async def roster(org: str) -> dict[str, Any]:
         }
         try:
             mf = load_manifest(resolve_member_source(m))
-            entry |= {
-                "version": mf.get("version"),
-                "author": mf.get("author"),
-                "description": mf.get("description"),
-                "capabilities": [c["id"] for c in mf.get("capabilities", [])],
-                "permissions": mf.get("permissions", {}),
-                "model_requirements": mf.get("model_requirements", {}),
-            }
-        except Exception as e:  # noqa: BLE001 —— 包损坏如实呈现，不假装正常
-            entry["error"] = str(e)
+        except Exception as e:  # noqa: BLE001 —— 模板缺失时快照兜底（实例已脱钩）
+            mf = None
+            if "capabilities" not in m:
+                entry["error"] = str(e)
+        entry |= {
+            "version": (mf or {}).get("version"),
+            "author": (mf or {}).get("author"),
+            # 实例快照优先（可编辑，§3.5 修正）；模板 manifest 只是出厂缺省
+            "description": m.get("description") or (mf or {}).get("description"),
+            "capabilities": m.get("capabilities")
+                or [c["id"] for c in (mf or {}).get("capabilities", [])],
+            "permissions": m.get("permissions") or (mf or {}).get("permissions", {}),
+            "model_requirements": (mf or {}).get("model_requirements", {}),
+        }
         members.append(entry)
     return {
         "org": org,
@@ -317,7 +321,11 @@ def _library_refs() -> set[str]:
 
 
 def _refs_in_use() -> dict[str, list[str]]:
-    """哪些模板正被哪些公司的实例引用（被引用的模板禁止移除）。"""
+    """哪些模板还被"尚未材料化"的实例依赖（这类实例首次拉起需要模板源）。
+
+    §3.5 修正：实例化即拷贝——已材料化（工作区存在）的实例与模板脱钩，
+    不再阻止模板移除；只保护招募后还没加入过的实例。
+    """
     from milod.config.paths import milo_home
 
     used: dict[str, list[str]] = {}
@@ -333,7 +341,7 @@ def _refs_in_use() -> dict[str, list[str]]:
         except Exception:  # noqa: BLE001
             continue
         for m in (doc.get("spec") or {}).get("members", []):
-            if m.get("agent"):
+            if m.get("agent") and not (d / "members" / m["name"]).exists():
                 used.setdefault(str(m["agent"]), []).append(d.name)
     return used
 
@@ -546,7 +554,18 @@ async def enroll_member(org: str, body: EnrollRequest) -> dict[str, Any]:
     if len(members) >= limit:
         raise HTTPException(409, f"已达编制上限 {limit}（监督幅度护栏）")
 
-    members.append({"name": name, **record_key, "enrolled": bool(body.activate)})
+    # 实例化即拷贝（§3.5 修正）：能力/权限/描述快照进实例记录，从此归实例所有
+    # （可编辑），与模板脱钩——模板后续升级/删除都不影响该成员
+    from milod.pack.renderer import derive_slug
+
+    members.append({
+        "name": name, **record_key, "enrolled": bool(body.activate),
+        "template_name": mf.get("name"),
+        "slug": derive_slug(name, str(mf.get("name") or "member")),
+        "description": mf.get("description", ""),
+        "capabilities": [c["id"] for c in mf.get("capabilities", [])],
+        "permissions": mf.get("permissions", {}) or {},
+    })
     f.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
     if body.activate:
@@ -560,6 +579,63 @@ async def enroll_member(org: str, body: EnrollRequest) -> dict[str, Any]:
             "status": "active" if body.activate else "pending",
             "note": ("已入职，实例运行中" if body.activate
                      else "已聘用（待入职）；到「公司」页点「入职」后开始工作")}
+
+
+class MemberPatch(BaseModel):
+    """成员编辑（§3.5 修正：实例配置归实例所有）。
+
+    改名仅限实例未运行时（工作区目录随显示名，运行中不搬家）；
+    能力/权限/描述即时落 org.yaml，对运行中实例需复岗后生效。
+    """
+
+    new_name: str | None = None
+    description: str | None = None
+    capabilities: list[str] | None = None
+    permissions: dict[str, Any] | None = None
+
+
+@app.patch("/api/orgs/{org}/members/{name}")
+async def patch_member(org: str, name: str, body: MemberPatch) -> dict[str, Any]:
+    import shutil
+
+    from milod.config.paths import org_dir
+
+    f = org_dir(org) / "org.yaml"
+    doc = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    members = (doc.get("spec") or {}).get("members", [])
+    m = next((x for x in members if x["name"] == name), None)
+    if m is None:
+        raise HTTPException(404, f"成员 {name} 不在名册中")
+
+    office = hub._offices.get(org)
+    loaded = bool(office and name in office._specs)
+    restart_needed = False
+
+    if body.new_name is not None and body.new_name.strip() != name:
+        new = body.new_name.strip()
+        if not (1 <= len(new) <= 20):
+            raise HTTPException(422, "成员名长度需在 1–20 字符")
+        if new.lower() in {"secretary", "secretariat", "system", "owner", "org"} or new == "秘书":
+            raise HTTPException(422, f"{new} 是系统保留名")
+        if any(x["name"] == new for x in members):
+            raise HTTPException(409, f"成员名 {new} 已被占用")
+        if loaded:
+            raise HTTPException(409, "运行中的成员不能改名——先停职再改")
+        old_dir = org_dir(org) / "members" / name
+        if old_dir.exists():
+            shutil.move(str(old_dir), str(org_dir(org) / "members" / new))
+        m["name"] = new
+
+    for k in ("description", "capabilities", "permissions"):
+        v = getattr(body, k)
+        if v is not None:
+            m[k] = v
+            restart_needed = True
+
+    f.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return {"name": m["name"],
+            "note": ("已保存；成员正在运行，能力/权限改动需停职后复岗生效"
+                     if loaded and restart_needed else "已保存")}
 
 
 @app.post("/api/orgs/{org}/members/{name}/activate")
