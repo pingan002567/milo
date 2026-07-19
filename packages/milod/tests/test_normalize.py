@@ -78,3 +78,37 @@ frames = list(iter_normalized([plain, end], task_id="t-3"))
 print("\n【D · 自然语言提问（信任边界）】")
 print(f"  事件序列: {[f.event for f in frames]}")
 print(f"  未产生 escalation: {'✅' if not any(f.event=='escalation' for f in frames) else '❌'}")
+
+# 场景 F：resume 重放——历史 ask_clarification 之后又有新产出 → 升级已答复，
+# 必须撤销挂起并正常交付（实测缺陷：评审员交了报告仍被标 interrupted 吞掉 delivery）
+replayed = SE("messages-tuple", tool_msg)  # 历史请示的 ToolMessage 重放
+fresh = SE("messages-tuple", {"type": "ai", "content": "收到答复，评审完成，报告已写入 review.md。" * 6})
+frames = list(iter_normalized([replayed, fresh, end], task_id="t-4"))
+kinds = [f.event for f in frames]
+print("\n【F · 重放已答复的请示 → 正常交付】")
+print(f"  事件序列: {kinds}")
+ok = "escalation" not in kinds and "delivery" in kinds
+sys_ev = next(f for f in frames if f.event == "system")
+print(f"  无升级且有交付: {'✅' if ok else '❌'}")
+print(f"  interrupted=False: {'✅' if not sys_ev.payload['interrupted'] else '❌'}")
+assert ok and not sys_ev.payload["interrupted"]
+
+# 场景 G：重放的请示之后成员又真的发起新请示 → 新请示必须生效
+fresh2 = SE("messages-tuple", {"type": "ai", "content": "我读完了文件，但发现一个需要拍板的问题。" * 6})
+live = SE("messages-tuple", {
+    "type": "tool", "name": "ask_clarification", "content": "两种方案选哪种？",
+    "artifact": {"human_input": {
+        "version": 1, "kind": "human_input_request", "source": "ask_clarification",
+        "request_id": "clarification:call_new", "tool_call_id": "call_new",
+        "clarification_type": "approach_choice", "question": "两种方案选哪种？",
+        "input_mode": "free_text", "options": [],
+    }},
+})
+frames = list(iter_normalized([replayed, fresh2, live, end], task_id="t-5"))
+esc = [f for f in frames if f.event == "escalation"]
+print("\n【G · 重放后又有新请示 → 新请示生效】")
+print(f"  事件序列: {[f.event for f in frames]}")
+ok = len(esc) == 1 and esc[0].payload["request_id"] == "clarification:call_new" \
+    and not any(f.event == "delivery" for f in frames)
+print(f"  升级 1 条且是新请示、无交付: {'✅' if ok else '❌'}")
+assert ok

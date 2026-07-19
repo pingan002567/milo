@@ -75,7 +75,10 @@ class SubprocessAdapter(MemberAdapter):
         self._group_of[envelope.task_id] = envelope.parent_task or envelope.task_id
         self._expected_artifacts[envelope.task_id] = list(envelope.output_spec.artifacts)
         res = await self._call(
-            "assign", {"task_id": envelope.task_id, "prompt": render_envelope(envelope)}
+            "assign", {"task_id": envelope.task_id, "prompt": render_envelope(envelope),
+                       # artifact 引用授权：worker 把这些文件注入成员输入目录
+                       "inputs": [{"name": a.name, "uri": a.uri}
+                                  for a in envelope.inputs.artifacts]}
         )
         return str(res.get("thread_id", envelope.task_id))
 
@@ -163,12 +166,18 @@ def render_envelope(envelope: TaskEnvelope) -> str:
         f"## 交付要求\n格式：{envelope.output_spec.format}",
     ]
     if envelope.output_spec.artifacts:
-        lines.append("产物文件：" + "、".join(envelope.output_spec.artifacts))
+        lines.append(
+            "产物文件：" + "、".join(envelope.output_spec.artifacts)
+            + "\n（用 write_file 工具写到 /mnt/user-data/outputs/ 目录下的同名文件，"
+            "正文只写交付摘要——只贴在正文里的内容不算交付，验收会退回）"
+        )
     if envelope.constraints:
         lines.append("## 边界\n" + "\n".join(f"- {c}" for c in envelope.constraints))
     if envelope.inputs.artifacts:
+        # 成员看到的是自己沙箱内的虚拟路径（授权注入后的位置），不是组织侧的宿主路径
         lines.append(
-            "## 输入材料\n" + "\n".join(f"- {a.name}: {a.uri}" for a in envelope.inputs.artifacts)
+            "## 输入材料（已放入你的输入目录，用 read_file 读取）\n"
+            + "\n".join(f"- /mnt/user-data/uploads/{a.name}" for a in envelope.inputs.artifacts)
         )
     if envelope.budget.tokens:
         lines.append(f"## 预算\n{envelope.budget.tokens} tokens")

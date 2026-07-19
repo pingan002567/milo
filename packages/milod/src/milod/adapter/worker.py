@@ -48,8 +48,32 @@ class Worker:
         task_id = params["task_id"]
         prompt = params["prompt"]
         thread_id = self._threads.setdefault(task_id, f"{self._member}-{task_id}")
+        self._inject_inputs(thread_id, params.get("inputs") or [])
         self._pump(task_id, prompt, thread_id)
         return {"task_id": task_id, "thread_id": thread_id}
+
+    def _inject_inputs(self, thread_id: str, inputs: list[dict]) -> None:
+        """artifact 引用授权的落地：把信封授权的产物拷进本线程 uploads 目录。
+
+        这是成员唯一的跨任务数据通道——组织侧宿主路径成员不可见也不可达，
+        成员只能经 /mnt/user-data/uploads/<name> 读到被明确授权的文件。
+        """
+        if not inputs:
+            return
+        from deerflow.config.paths import get_paths
+        from deerflow.runtime.user_context import get_effective_user_id
+
+        # 必须带 user_id：harness 线程目录是用户作用域的（home/users/<uid>/threads/…），
+        # 不带则解析到 home/threads/… ——文件落在成员根本看不见的地方
+        uid = get_effective_user_id()
+        for a in inputs:
+            src = Path(a["uri"])
+            if not src.is_file():
+                continue  # 源缺失如实跳过；信封的输入材料清单会让成员发现并上报
+            dest = get_paths().resolve_virtual_path(
+                thread_id, f"mnt/user-data/uploads/{Path(a['name']).name}", user_id=uid)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(src.read_bytes())
 
     def resume(self, params: dict) -> dict:
         """组长答复后恢复被 ask_clarification 中断的任务（同 thread + checkpointer）。"""
@@ -63,8 +87,12 @@ class Worker:
         thread_id = self._threads.get(task_id, f"{self._member}-{task_id}")
         out: list[dict] = []
         for rel in params.get("artifacts", []):
+            # get_artifact 只认 /mnt/user-data/... 虚拟路径；信封里的产物是裸文件名，
+            # 按约定成员写在 outputs/ 下（见 render_envelope 的交付指引）
+            vpath = rel if rel.lstrip("/").startswith("mnt/user-data") \
+                else f"mnt/user-data/outputs/{rel}"
             try:
-                content, media_type = self._client.get_artifact(thread_id, rel)
+                content, media_type = self._client.get_artifact(thread_id, vpath)
             except Exception as e:  # noqa: BLE001 —— 缺失产物如实上报，不伪造
                 out.append({"name": rel, "error": str(e)})
                 continue

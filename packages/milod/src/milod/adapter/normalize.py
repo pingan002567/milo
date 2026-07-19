@@ -137,7 +137,13 @@ def iter_normalized(
     落实"汇报是给人看的摘要，不是日志流"。
     """
     last_text = ""
-    escalated = False
+    # 升级采用**终局判定**而非即时判定：resume 时 harness 会重放历史消息，
+    # 其中包含已经答复过的 ask_clarification（tool_call 与 ToolMessage 都会再现）。
+    # 若见到升级就立刻定性，重放会把整个 run 误标 interrupted、吞掉 delivery
+    # （实测：评审员明明交了 review.md，任务却一直停在 input_required）。
+    # 规则：升级信号先挂起（held）；其后又有新的 AI 产出 = 那次升级是历史/已答复，
+    # 撤销挂起；只有流在挂起状态下结束，才是真的在等人。
+    held: dict[str, Any] | None = None
     pending_escalation = False  # 见过半截 tool_call，等完整载荷
     buf: list[str] = []
 
@@ -159,15 +165,14 @@ def iter_normalized(
             continue
 
         args = find_clarification_args(data)
-        if args is not None and not escalated:
-            # 流式增量里的 tool_call.args 可能只有半截（question 为空）——
-            # 标记待升级但先不发，等最终 ToolMessage 的 artifact.human_input 完整载荷。
+        if args is not None:
+            # 半截 tool_call（question 为空）先记待定，等完整载荷；
+            # 同一请示的完整 ToolMessage 载荷后到时直接覆盖（options 更全）
             if args.get("_partial") and not args.get("question"):
                 pending_escalation = True
                 continue
-            escalated = True
-            yield from flush_status()
-            yield EventFrame(event="escalation", task_id=task_id, payload=escalation_payload(args))
+            held = escalation_payload(args)
+            pending_escalation = False
             continue
 
         if etype == "messages-tuple" and data.get("type") == "ai":
@@ -175,12 +180,14 @@ def iter_normalized(
             if not text.strip():
                 continue
             marker = parse_marker_escalation(text)
-            if marker and not escalated:
-                escalated = True
-                yield from flush_status()
-                yield EventFrame(event="escalation", task_id=task_id, payload=marker)
+            if marker:
+                held = marker
                 continue
             if not data.get("tool_calls"):
+                if held is not None or pending_escalation:
+                    # 升级之后成员又有新产出 → 升级已被答复（重放场景），撤销
+                    held = None
+                    pending_escalation = False
                 buf.append(text)
                 if sum(len(x) for x in buf) >= status_min_chars:
                     yield from flush_status()
@@ -194,19 +201,17 @@ def iter_normalized(
         elif etype == "end":
             yield from flush_status()
             # 只见半截 tool_call 却始终没等到完整载荷：仍需上报中断，否则任务会静默卡死
-            if pending_escalation and not escalated:
-                escalated = True
-                yield EventFrame(
-                    event="escalation",
-                    task_id=task_id,
-                    payload=escalation_payload({"question": last_text[:400] or "成员请求澄清（载荷不完整）"}),
-                )
+            if pending_escalation and held is None:
+                held = escalation_payload(
+                    {"question": last_text[:400] or "成员请求澄清（载荷不完整）"})
+            if held is not None:
+                yield EventFrame(event="escalation", task_id=task_id, payload=held)
             yield EventFrame(
                 event="system",
                 task_id=task_id,
-                payload={"usage": data.get("usage", {}), "interrupted": escalated},
+                payload={"usage": data.get("usage", {}), "interrupted": held is not None},
             )
-            if not escalated:
+            if held is None:
                 yield EventFrame(
                     event="delivery", task_id=task_id, payload={"summary": last_text[:2000]}
                 )

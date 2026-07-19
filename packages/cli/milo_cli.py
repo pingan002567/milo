@@ -113,9 +113,18 @@ async def _run(args) -> int:
         return 0
 
     # 2) 逐步执行：v0 无 DAG，按计划顺序派单并把上一步产物前递给下一步
+    # （前递 = artifact 引用授权：文件经 inputs.artifacts 注入下游输入目录，与 hub 一致）
     print()
+    from milod.models import ArtifactRef
+
     carry: list[str] = []  # 上游交付摘要（artifact 引用 + 摘要）
+    prev_arts: list[dict] = []
     for idx, env in enumerate(envelopes, 1):
+        if prev_arts:
+            env.inputs.artifacts = [
+                ArtifactRef(name=a["name"], uri=a["uri"], media_type=a.get("media_type"))
+                for a in prev_arts if a.get("uri")
+            ]
         if carry:
             env.constraints.append("参考上一步的产出：" + " / ".join(c[:300] for c in carry[-1:]))
         if len(envelopes) > 1:
@@ -152,6 +161,7 @@ async def _run(args) -> int:
             payload = office.last_delivery(env.task_id) or {}
             summary = payload.get("summary") or ""
             arts = payload.get("artifacts") or []
+            prev_arts = [a for a in arts if a.get("uri")]
             if arts:
                 carry.append("产物 " + "、".join(a["name"] for a in arts if a.get("name")))
             elif summary:

@@ -165,4 +165,14 @@ def _tools_for(perms: dict) -> list[dict]:
                 "max_results": 5,
             }
         )
+    # 文件工具按 filesystem 权限注入。这些是 harness 的沙箱路径工具
+    # （路径校验锁在 /mnt/user-data 虚拟目录内），不是 host bash——
+    # 成员没有它们就无法产出 artifact 文件，交付只能贴正文（验收必退回）
+    fs = perms.get("filesystem")
+    def _t(name: str) -> dict:
+        return {"name": name, "group": "sandbox", "use": f"deerflow.sandbox.tools:{name}_tool"}
+    if fs in ("workspace", "readwrite"):
+        tools += [_t("ls"), _t("read_file"), _t("write_file"), _t("str_replace")]
+    elif fs == "readonly":
+        tools += [_t("ls"), _t("read_file")]
     return tools

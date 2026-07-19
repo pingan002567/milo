@@ -110,6 +110,25 @@ export const api = {
       body: JSON.stringify({ pack, name: name ?? null }),
     }).then(j) as Promise<{ name: string; capabilities: string[]; note: string }>,
 
+  bindings: (org: string) =>
+    fetch(`/api/orgs/${org}/bindings`).then(j) as Promise<{
+      org: string;
+      model: { name?: string; provider?: string; model?: string; api_base?: string; secret_env?: string };
+      secret_present: boolean;
+    }>,
+
+  updateBindings: (org: string, patch: { api_base?: string; model?: string; provider?: string; secret_env?: string }) =>
+    fetch(`/api/orgs/${org}/bindings`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }).then(j) as Promise<{ note: string }>,
+
+  putSecret: (envName: string, value: string) =>
+    fetch(`/api/secrets/${envName}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value }),
+    }).then(j) as Promise<{ stored: boolean }>,
+
   activate: (org: string, name: string) =>
     fetch(`/api/orgs/${org}/members/${name}/activate`, { method: "POST" })
       .then(j) as Promise<{ name: string; capabilities: string[]; status: string }>,

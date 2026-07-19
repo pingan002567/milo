@@ -3,6 +3,7 @@ import { GroupView } from "./components/GroupView";
 import { MarketView } from "./components/MarketView";
 import { OrgView } from "./components/OrgView";
 import { RosterView } from "./components/RosterView";
+import { SettingsView } from "./components/SettingsView";
 import {
   api, subscribe,
   type GroupSummary, type Member, type MiloEvent, type OrgSummary,
@@ -10,7 +11,7 @@ import {
 } from "./lib/api";
 import { initNotifications, notifyForEvent, onNotificationOpen } from "./lib/notify";
 
-type Screen = "chat" | "todo" | "org" | "market" | "roster" | "group";
+type Screen = "chat" | "todo" | "org" | "market" | "roster" | "group" | "settings";
 const LAST_ORG = "milo.lastOrg";
 
 export default function App() {
@@ -163,6 +164,9 @@ export default function App() {
         <button className={`nv ${screen === "roster" ? "on" : ""}`} onClick={() => setScreen("roster")}>
           🗂 花名册
         </button>
+        <button className={`nv ${screen === "settings" ? "on" : ""}`} onClick={() => setScreen("settings")}>
+          ⚙️ 设置
+        </button>
 
         <div className="grpsec">
           <div className="grplabel">任务群</div>
@@ -226,6 +230,8 @@ export default function App() {
         )}
 
         {screen === "roster" && <RosterView org={ORG} />}
+
+        {screen === "settings" && <SettingsView org={ORG} />}
 
         {screen === "group" && gid && (
           <GroupView title={title} status={gstatus} events={events} tasks={tasks} plan={plan}

@@ -162,8 +162,24 @@ class Hub:
         office.sync_group_status(group_id)
 
     async def _run_steps(self, office: Office, envelopes: list, group_id: str) -> None:
+        """逐步派单并前递产物。
+
+        前递 = artifact 引用授权（编制设计 §3.4）：上一步的交付物以引用形式
+        写进下一步信封的 inputs.artifacts，由适配层注入成员输入目录——
+        只递文件名不递文件，下游只能凭空猜（实测：评审员拿不到代码就自己
+        重构一份来评审，结论全部作废）。
+        """
+        from milod.models import ArtifactRef
+
         carry: list[str] = []
+        prev_arts: list[dict] = []
         for env in envelopes:
+            if prev_arts:
+                env.inputs.artifacts = [
+                    ArtifactRef(name=a["name"], uri=a["uri"],
+                                media_type=a.get("media_type"))
+                    for a in prev_arts if a.get("uri")
+                ]
             if carry:
                 env.constraints.append("参考上一步的产出：" + carry[-1][:300])
             try:
@@ -181,6 +197,7 @@ class Hub:
                 v = await office.collect(env.task_id)
                 payload = office.last_delivery(env.task_id) or {}
                 arts = payload.get("artifacts") or []
+                prev_arts = [a for a in arts if a.get("uri")]
                 carry.append("产物 " + "、".join(a["name"] for a in arts) if arts
                              else str(payload.get("summary") or ""))
                 if not v.accepted:

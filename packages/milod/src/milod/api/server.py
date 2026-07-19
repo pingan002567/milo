@@ -75,6 +75,65 @@ async def list_orgs() -> dict[str, Any]:
     return {"orgs": orgs}
 
 
+# ---- 设置（模型绑定 + 密钥）----------------------------------------------
+class BindingsUpdate(BaseModel):
+    api_base: str | None = None
+    model: str | None = None
+    provider: str | None = None
+    secret_env: str | None = None
+
+
+class SecretUpdate(BaseModel):
+    value: str
+
+
+@app.get("/api/orgs/{org}/bindings")
+async def get_bindings(org: str) -> dict[str, Any]:
+    """AI 配置（设置页）：模型绑定 + 密钥在位状态。密钥值永不回显。"""
+    from milod.config.paths import org_dir
+    from milod.secretariat.office import _read_secret
+
+    f = org_dir(org) / "bindings.yaml"
+    if not f.exists():
+        raise HTTPException(404, f"组织 {org} 没有 bindings.yaml")
+    m = (yaml.safe_load(f.read_text(encoding="utf-8")) or {}).get("model") or {}
+    return {
+        "org": org,
+        "model": {k: m.get(k) for k in ("name", "provider", "model", "api_base", "secret_env")},
+        "secret_present": bool(_read_secret(m.get("secret_env", ""))),
+    }
+
+
+@app.put("/api/orgs/{org}/bindings")
+async def update_bindings(org: str, body: BindingsUpdate) -> dict[str, Any]:
+    """改模型绑定（bindings.yaml 是环境绑定文件，不入 org.yaml；重启该组织后生效）。"""
+    from milod.config.paths import org_dir
+
+    f = org_dir(org) / "bindings.yaml"
+    doc = yaml.safe_load(f.read_text(encoding="utf-8")) if f.exists() else {}
+    m = doc.setdefault("model", {})
+    for k in ("api_base", "model", "provider", "secret_env"):
+        v = getattr(body, k)
+        if v is not None:
+            m[k] = v
+    if body.model is not None:
+        m["name"] = body.model  # name 跟随模型档位，保持单一事实
+    f.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return {"org": org, "model": m, "note": "已保存；对运行中实例需重启组织后生效"}
+
+
+@app.put("/api/secrets/{env_name}")
+async def put_secret(env_name: str, body: SecretUpdate) -> dict[str, Any]:
+    """密钥入 OS 钥匙串（keyring service=milo）。零落盘、不回显、不入日志。"""
+    try:
+        import keyring
+
+        keyring.set_password("milo", env_name, body.value)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"钥匙串写入失败：{e}") from e
+    return {"name": env_name, "stored": True}
+
+
 # ---- 成员 -----------------------------------------------------------------
 @app.get("/api/orgs/{org}/members")
 async def list_members(org: str) -> dict[str, Any]:
