@@ -3,7 +3,7 @@ import { GroupView } from "./components/GroupView";
 import { MarketView } from "./components/MarketView";
 import { OrgView } from "./components/OrgView";
 import { RosterView } from "./components/RosterView";
-import { SettingsView } from "./components/SettingsView";
+import { SettingsModal } from "./components/SettingsView";
 import {
   api, subscribe,
   type GroupSummary, type Member, type MiloEvent, type OrgSummary,
@@ -11,7 +11,7 @@ import {
 } from "./lib/api";
 import { initNotifications, notifyForEvent, onNotificationOpen } from "./lib/notify";
 
-type Screen = "chat" | "todo" | "org" | "market" | "roster" | "group" | "settings";
+type Screen = "chat" | "todo" | "org" | "market" | "roster" | "group";
 const LAST_ORG = "milo.lastOrg";
 
 export default function App() {
@@ -30,6 +30,7 @@ export default function App() {
   const [plan, setPlan] = useState<PlanStep[] | null>(null);
   const [filter, setFilter] = useState("");
   const [input, setInput] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const seen = useRef(new Set<string>());
 
   const refreshLists = useCallback(async () => {
@@ -164,7 +165,7 @@ export default function App() {
         <button className={`nv ${screen === "roster" ? "on" : ""}`} onClick={() => setScreen("roster")}>
           🗂 花名册
         </button>
-        <button className={`nv ${screen === "settings" ? "on" : ""}`} onClick={() => setScreen("settings")}>
+        <button className="nv" onClick={() => setSettingsOpen(true)}>
           ⚙️ 设置
         </button>
 
@@ -231,8 +232,6 @@ export default function App() {
 
         {screen === "roster" && <RosterView org={ORG} />}
 
-        {screen === "settings" && <SettingsView org={ORG} />}
-
         {screen === "group" && gid && (
           <GroupView title={title} status={gstatus} events={events} tasks={tasks} plan={plan}
                      onReply={onReply} onApprove={onApprove} onReject={onReject} />
@@ -274,6 +273,9 @@ export default function App() {
           </>
         )}
       </aside>
+
+      <SettingsModal org={ORG} open={settingsOpen} connected={conn === "open"}
+                     onClose={() => setSettingsOpen(false)} />
 
       <div className="statusbar">
         <span className={`dot ${conn}`} />

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { useThemeMode } from "../lib/theme";
 
 /**
- * 设置页——形态对齐 stock-agent-001 Settings：
- * Tab 分区 + SectionCard/SettingRow 原语 + 密钥不回显 + 测试连接 + 改动才出现保存钮。
+ * 系统设置——照搬 stock-agent-001 的形态：
+ * 居中悬浮模态（遮罩+大窗，Esc/点遮罩/关闭按钮退出）+ 左分区导航右内容 +
+ * SectionCard/SettingRow 原语 + 通用设置（主题模式/工作区/锁定护栏卡）。
  * 事实源不变：org 的 bindings.yaml + OS 钥匙串；此页只是编辑器。
  */
 
@@ -43,9 +45,10 @@ function SettingRow({ label, sub, children }: {
   );
 }
 
-/* ---------- 通用 ---------- */
+/* ---------- 通用（外观/工作区/护栏，形态照搬）---------- */
 
 function GeneralTab({ org }: { org: string }) {
+  const { themeMode, setThemeMode } = useThemeMode();
   const [members, setMembers] = useState<number | null>(null);
   const [limit, setLimit] = useState<number | null>(null);
 
@@ -58,7 +61,27 @@ function GeneralTab({ org }: { org: string }) {
 
   return (
     <div className="settings-stack">
-      <SectionCard icon="🏛" title="工作区" description="当前公司与数据目录；切换公司在左栏顶部">
+      <SectionCard title="外观" description="明暗主题跟随">
+        <SettingRow label="主题模式" sub="跟随系统时随 macOS 自动切换">
+          <div className="seg-ctl">
+            {([["light", "白天"], ["dark", "夜晚"], ["system", "跟随系统"]] as const).map(([mode, label]) => (
+              <button key={mode} type="button" className={themeMode === mode ? "on" : ""}
+                onClick={() => setThemeMode(mode)}>{label}</button>
+            ))}
+          </div>
+        </SettingRow>
+      </SectionCard>
+
+      <SectionCard title="人事红线" subtitle="V0 锁定" description="安全护栏，本版本不可关闭">
+        <SettingRow label="人事变动" sub="招聘 / 入职 / 停职 / 辞退只能由你发起">
+          <span className="tag" style={{ color: "var(--green)", background: "var(--green-soft)" }}>仅限老板</span>
+        </SettingRow>
+        <SettingRow label="秘书长权限" sub="只执行与建议，无自动人事动作">
+          <span className="tag">执行者</span>
+        </SettingRow>
+      </SectionCard>
+
+      <SectionCard title="工作区" description="当前公司与数据目录；切换公司在左栏顶部">
         <SettingRow label="当前公司">
           <span className="mono" style={{ fontSize: 12 }}>{org}</span>
         </SettingRow>
@@ -69,15 +92,6 @@ function GeneralTab({ org }: { org: string }) {
         </SettingRow>
         <SettingRow label="数字员工">
           <span className="mono" style={{ fontSize: 12 }}>{members ?? "-"} / 上限 {limit ?? "-"}</span>
-        </SettingRow>
-      </SectionCard>
-
-      <SectionCard icon="🔒" title="人事红线" subtitle="锁定" description="安全护栏，本版本不可关闭">
-        <SettingRow label="人事变动" sub="招聘 / 入职 / 停职 / 辞退只能由你发起">
-          <span className="tag" style={{ color: "var(--green)", background: "var(--green-soft)" }}>仅限老板</span>
-        </SettingRow>
-        <SettingRow label="秘书长权限" sub="只执行与建议，无自动人事动作">
-          <span className="tag">执行者</span>
         </SettingRow>
       </SectionCard>
     </div>
@@ -199,23 +213,60 @@ function AiTab({ org }: { org: string }) {
   );
 }
 
-/* ---------- 页面 ---------- */
+/* ---------- 弹窗（照搬 SettingsModal：遮罩+大窗+左导航右内容）---------- */
 
 type Tab = "general" | "ai";
 
-export function SettingsView({ org }: { org: string }) {
-  const [tab, setTab] = useState<Tab>("ai");
+const TABS: Array<{ key: Tab; label: string; icon: string }> = [
+  { key: "general", label: "通用", icon: "⚙️" },
+  { key: "ai", label: "AI 配置", icon: "🤖" },
+];
+
+export function SettingsModal({ org, open, connected, onClose }: {
+  org: string; open: boolean; connected: boolean; onClose: () => void;
+}) {
+  const [tab, setTab] = useState<Tab>("general");
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
   return (
-    <>
-      <div className="h">设置</div>
-      <div className="seg-ctl" style={{ marginBottom: 16 }}>
-        {([["general", "通用"], ["ai", "AI 配置"]] as const).map(([t, label]) => (
-          <button key={t} type="button" className={tab === t ? "on" : ""}
-            onClick={() => setTab(t)}>{label}</button>
-        ))}
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="settings-modal" role="dialog" aria-modal="true">
+        <div className="settings-modal-head">
+          <span className="settings-modal-title">系统设置</span>
+          <button className="func-close" onClick={onClose} title="关闭 (Esc)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div className="settings-modal-body">
+          <div className="settings-layout">
+            <nav className="settings-nav">
+              {TABS.map((t) => (
+                <button key={t.key} type="button"
+                  className={`settings-nav-item ${tab === t.key ? "active" : ""}`}
+                  onClick={() => setTab(t.key)}>
+                  <span aria-hidden>{t.icon}</span>{t.label}
+                </button>
+              ))}
+              <div className="settings-nav-gap" />
+              <div className="settings-nav-foot">
+                <span className={`settings-runtime-dot ${connected ? "ok" : ""}`} />
+                milod · {connected ? "已连接" : "未连接"}
+              </div>
+            </nav>
+            <div className="settings-content">
+              {tab === "general" && <GeneralTab org={org} />}
+              {tab === "ai" && <AiTab org={org} />}
+            </div>
+          </div>
+        </div>
       </div>
-      {tab === "general" && <GeneralTab org={org} />}
-      {tab === "ai" && <AiTab org={org} />}
-    </>
+    </div>
   );
 }
