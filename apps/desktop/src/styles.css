@@ -379,3 +379,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 .member-modal .settings-content { overflow-y: auto; }
 .capx { border: none; background: none; color: var(--crit); cursor: pointer;
   margin-left: 4px; font-size: 12px; padding: 0; }
+
+/* 私聊弹窗 */
+.dmmodal { display: grid; grid-template-rows: auto 1fr; }
+.dmbody { display: flex; flex-direction: column; min-height: 0; padding: 14px 18px; }
+.dmmsgs { flex: 1; min-height: 0; overflow-y: auto; }
+.dmcomposer { margin-top: 10px; }

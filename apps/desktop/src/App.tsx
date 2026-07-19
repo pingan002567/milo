@@ -3,6 +3,7 @@ import { GroupView } from "./components/GroupView";
 import { MarketView } from "./components/MarketView";
 import { OrgView } from "./components/OrgView";
 import { RosterView } from "./components/RosterView";
+import { MemberChatModal } from "./components/MemberChatModal";
 import { SecretaryView } from "./components/SecretaryView";
 import { SettingsModal } from "./components/SettingsView";
 import {
@@ -33,6 +34,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [focusTask, setFocusTask] = useState<string | null>(null);
   const [secEvents, setSecEvents] = useState<MiloEvent[]>([]);  // 秘书对话实时流
+  const [dmTarget, setDmTarget] = useState<string | null>(null);   // 私聊对象
+  const [dmEvents, setDmEvents] = useState<MiloEvent[]>([]);       // 私聊实时流
   const seen = useRef(new Set<string>());
 
   const refreshLists = useCallback(async () => {
@@ -87,6 +90,7 @@ export default function App() {
       if (!e.replay) notifyForEvent(e);
       setEvents((prev) => (e.group_id === gidRef.current ? [...prev, e] : prev));
       if (e.group_id === "secretary") setSecEvents((prev) => [...prev, e]);
+      if (e.group_id.startsWith("dm-")) setDmEvents((prev) => [...prev, e]);
       refreshLists();
       // 汇报（status）是 token 级高频流，只 append 不重拉详情——
       // 否则长会话是 O(n²) 请求；状态推进类事件才需要同步任务/群状态
@@ -210,7 +214,7 @@ export default function App() {
           </>
         )}
 
-        {screen === "org" && <OrgView org={ORG} onChanged={refreshLists} />}
+        {screen === "org" && <OrgView org={ORG} onChanged={refreshLists} onDM={setDmTarget} />}
 
         {screen === "market" && <MarketView onChanged={refreshLists} />}
 
@@ -261,6 +265,11 @@ export default function App() {
 
       <SettingsModal org={ORG} open={settingsOpen} connected={conn === "open"}
                      onClose={() => setSettingsOpen(false)} />
+
+      {dmTarget && (
+        <MemberChatModal org={ORG} member={dmTarget} liveEvents={dmEvents}
+                         onClose={() => setDmTarget(null)} />
+      )}
 
       <div className="statusbar">
         <span className={`dot ${conn}`} />

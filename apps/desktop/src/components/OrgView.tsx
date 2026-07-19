@@ -57,7 +57,7 @@ function HireForm({ suggested, busy, onHire, onCancel }: {
   );
 }
 
-export function OrgView({ org, onChanged }: { org: string; onChanged: () => void }) {
+export function OrgView({ org, onChanged, onDM }: { org: string; onChanged: () => void; onDM: (name: string) => void }) {
   const [members, setMembers] = useState<RosterMember[]>([]);
   const [library, setLibrary] = useState<LibraryItem[]>([]);
   const [hiring, setHiring] = useState<string | null>(null);  // 正在填招募表单的模板 ref
@@ -158,6 +158,10 @@ export function OrgView({ org, onChanged }: { org: string; onChanged: () => void
                 {label}
               </span>
               <div style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
+                {(phase === "idle" || phase === "busy") && (
+                  <button className="btn sm" title="私聊：考察、调教、让它自改人设与档案"
+                          onClick={() => onDM(m.name)}>私聊</button>
+                )}
                 {phase === "pending" && (
                   <button className="btn primary sm" disabled={acting}
                           onClick={() => activate(m, false)}>

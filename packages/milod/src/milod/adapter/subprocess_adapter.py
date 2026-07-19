@@ -95,18 +95,21 @@ class SubprocessAdapter(MemberAdapter):
             self._group_of[task_id] = group_id
         await self._call("resume", {"task_id": task_id, "answer": answer})
 
-    async def chat(self, text: str, *, group_id: str = "secretary") -> None:
-        """自由对话（秘书专用）：单一常驻线程，checkpointer 即记忆。
+    async def chat(self, text: str, *, group_id: str = "secretary",
+                   channel: str = "chat") -> None:
+        """自由对话通道（秘书对话 / 成员私聊共用）：每通道一条常驻线程。
 
         首条消息 assign 建线程，后续 resume 接续——worker 重启后 assign 复用
         同一 thread_id，checkpoint 仍在，对话记忆跨重启延续。
         """
-        self._group_of["chat"] = group_id
-        if getattr(self, "_chat_started", False):
-            await self._call("resume", {"task_id": "chat", "answer": text})
+        self._group_of[channel] = group_id
+        started: set[str] = getattr(self, "_chat_channels", None) or set()
+        self._chat_channels = started
+        if channel in started:
+            await self._call("resume", {"task_id": channel, "answer": text})
         else:
-            self._chat_started = True
-            await self._call("assign", {"task_id": "chat", "prompt": text, "inputs": []})
+            started.add(channel)
+            await self._call("assign", {"task_id": channel, "prompt": text, "inputs": []})
 
     async def events(self) -> AsyncIterator[MiloEvent]:  # type: ignore[override]
         while True:

@@ -176,6 +176,13 @@ export const api = {
     fetch(`/api/orgs/${org}/members/${name}/activate`, { method: "POST" })
       .then(j) as Promise<{ name: string; capabilities: string[]; status: string }>,
 
+  /** 私聊成员（全权调教通道）：历史在群 dm-<name>，回复经 WS。 */
+  memberDM: (org: string, name: string, text: string) =>
+    fetch(`/api/orgs/${org}/members/${name}/dm`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }).then(j) as Promise<{ status: string; group_id: string }>,
+
   /** 成员编辑（§3.5 修正：实例配置归实例所有）。改名仅限未运行时。 */
   updateMember: (org: string, name: string, patch: {
     new_name?: string; description?: string;

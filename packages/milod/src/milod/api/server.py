@@ -201,7 +201,8 @@ async def list_groups(org: str) -> dict[str, Any]:
     """左边栏任务群列表：@你 未处理的带角标（org 审计群与秘书对话群不在其列）。"""
     office = await hub.office(org)
     return {"groups": [g for g in office.store.groups()
-                       if g["group_id"] not in ("org", "secretary")]}
+                       if g["group_id"] not in ("org", "secretary")
+                       and not g["group_id"].startswith("dm-")]}
 
 
 @app.get("/api/orgs/{org}/groups/{group_id}")
@@ -636,6 +637,23 @@ async def patch_member(org: str, name: str, body: MemberPatch) -> dict[str, Any]
     return {"name": m["name"],
             "note": ("已保存；成员正在运行，能力/权限改动需停职后复岗生效"
                      if loaded and restart_needed else "已保存")}
+
+
+@app.post("/api/orgs/{org}/members/{name}/dm")
+async def member_dm(org: str, name: str, body: SecretaryChatRequest) -> dict[str, Any]:
+    """私聊成员（全权调教通道）：对话历史在群 dm-<name>，回复经 WS 推送。
+
+    成员工作中时消息会排队，等其交付后回复（worker 单线程，人在忙）。
+    """
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(422, "消息不能为空")
+    office = await hub.office(org)
+    if name not in office._adapters:
+        raise HTTPException(409, f"成员 {name} 不在运行中——先让其加入")
+    task = asyncio.create_task(office.dm(name, text))
+    hub.track(f"dm-{org}-{name}-{uuid.uuid4().hex[:4]}", task)
+    return {"status": "ok", "group_id": f"dm-{name}"}
 
 
 @app.post("/api/orgs/{org}/members/{name}/activate")

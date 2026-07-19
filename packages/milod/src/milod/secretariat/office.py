@@ -110,7 +110,21 @@ class Office:
             # 模板只是出厂来源；快照在则模板缺失也能拉起
             snapshot={k: m[k] for k in ("capabilities", "permissions", "description",
                                         "template_name", "slug") if k in m},
+            extra_tools=[
+                {"name": n, "group": "milo",
+                 "use": f"milod.member_tools:{n}_tool"}
+                for n in ("update_my_persona", "update_my_profile")
+            ],
         )
+        # 私聊全权通道（用户决策）：成员带自我修改工具，但工具内有线程门禁——
+        # 只在 -dm 私聊线程可执行，任务线程调用直接拒绝（防注入驱动自改）
+        import os as _os
+
+        member_spec.extra_env = {
+            "MILO_API_BASE": f"http://127.0.0.1:{_os.environ.get('MILO_PORT', '8899')}",
+            "MILO_ORG": self.org,
+            "MILO_MEMBER": m["name"],
+        }
         adapter = SubprocessAdapter()
         await adapter.enroll(member_spec)
         self._adapters[m["name"]] = adapter
@@ -243,6 +257,16 @@ class Office:
             assigned.append(member)
         return assigned
 
+    async def dm(self, name: str, text: str) -> None:
+        """老板私聊成员（全权调教通道）：独立线程、共享实例记忆，不承载任务。"""
+        if name not in self._adapters:
+            raise KeyError(f"成员 {name} 不在运行中——先让其加入")
+        gid = f"dm-{name}"
+        self.store.ensure_group(gid, title=f"私聊 · {name}")
+        self._emit(MiloEvent(
+            group_id=gid, type=EventType.CHAT, actor="owner", payload={"text": text}))
+        await self._adapters[name].chat(text, group_id=gid, channel="dm")
+
     async def reply(self, task_id: str, answer: str) -> None:
         """组长答复被中断的任务 → resume 接续。"""
         row = next((t for t in self.store.tasks() if t["task_id"] == task_id), None)
@@ -289,6 +313,18 @@ class Office:
 
     async def _pump(self, member: str, adapter: SubprocessAdapter) -> None:
         async for ev in adapter.events():
+            if ev.group_id.startswith("dm-"):
+                # 私聊语境：交付/请示都是"成员说话"，没有任务状态机
+                if ev.type in (EventType.DELIVERY, EventType.ESCALATION):
+                    text = str(ev.payload.get("summary")
+                               or ev.payload.get("question") or "").strip()
+                    if text:
+                        self._emit(MiloEvent(
+                            group_id=ev.group_id, type=EventType.CHAT,
+                            actor=member, payload={"text": text}))
+                elif ev.type == EventType.STATUS:
+                    self._emit(ev)
+                continue
             if ev.task_id:
                 if ev.type == EventType.ESCALATION:
                     self.store.set_state(ev.task_id, TaskState.INPUT_REQUIRED)
