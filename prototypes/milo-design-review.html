@@ -1,0 +1,705 @@
+<title>Milo 设计评审</title>
+<style>
+  :root {
+    --paper: #F9F8F4;
+    --panel: #FFFFFF;
+    --panel-2: #F1F0E9;
+    --ink: #23282B;
+    --ink-2: #5A615E;
+    --ink-3: #8A918C;
+    --line: #DEDCD2;
+    --accent: #3E6B54;
+    --accent-soft: #E4ECE6;
+    --amber: #B07830;
+    --amber-soft: #F3E8D8;
+    --code-bg: #23282B;
+    --code-ink: #D8DED9;
+    --code-cmt: #7E8B82;
+    --ok: #3E6B54;
+    --warn: #B07830;
+    --shadow: 0 1px 3px rgba(35,40,43,.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #161A17;
+      --panel: #1D221E;
+      --panel-2: #232924;
+      --ink: #E4E7E2;
+      --ink-2: #A9B1AA;
+      --ink-3: #7B837C;
+      --line: #313832;
+      --accent: #83B098;
+      --accent-soft: #24352B;
+      --amber: #D2A05C;
+      --amber-soft: #3A2F1E;
+      --code-bg: #10130F;
+      --code-ink: #C9D2CA;
+      --code-cmt: #6D7A6F;
+      --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #161A17; --panel: #1D221E; --panel-2: #232924;
+    --ink: #E4E7E2; --ink-2: #A9B1AA; --ink-3: #7B837C; --line: #313832;
+    --accent: #83B098; --accent-soft: #24352B;
+    --amber: #D2A05C; --amber-soft: #3A2F1E;
+    --code-bg: #10130F; --code-ink: #C9D2CA; --code-cmt: #6D7A6F; --shadow: none;
+  }
+  :root[data-theme="light"] {
+    --paper: #F9F8F4; --panel: #FFFFFF; --panel-2: #F1F0E9;
+    --ink: #23282B; --ink-2: #5A615E; --ink-3: #8A918C; --line: #DEDCD2;
+    --accent: #3E6B54; --accent-soft: #E4ECE6;
+    --amber: #B07830; --amber-soft: #F3E8D8;
+    --code-bg: #23282B; --code-ink: #D8DED9; --code-cmt: #7E8B82;
+    --shadow: 0 1px 3px rgba(35,40,43,.07);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+    font-size: 15px; line-height: 1.75; margin: 0;
+  }
+  .serif, h1, h2, h3 {
+    font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+  }
+  .mono, code, pre { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+
+  .wrap { display: flex; max-width: 1240px; margin: 0 auto; }
+  nav {
+    width: 248px; flex: none; position: sticky; top: 0; align-self: flex-start;
+    height: 100vh; overflow-y: auto; padding: 28px 16px 28px 24px;
+    border-right: 1px solid var(--line);
+  }
+  main { flex: 1; min-width: 0; padding: 40px 48px 96px; max-width: 920px; }
+  @media (max-width: 900px) {
+    .wrap { display: block; }
+    nav { position: static; width: auto; height: auto; border-right: none; border-bottom: 1px solid var(--line); }
+    main { padding: 24px 20px 72px; }
+  }
+
+  nav .nav-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+  nav .nav-sub { font-size: 12px; color: var(--ink-3); margin-bottom: 14px; }
+  nav a {
+    display: flex; align-items: baseline; gap: 8px; padding: 4px 6px; border-radius: 4px;
+    color: var(--ink-2); text-decoration: none; font-size: 13px; line-height: 1.5;
+  }
+  nav a:hover { background: var(--panel-2); color: var(--ink); }
+  nav a .no { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; width: 18px; flex: none; }
+  nav a .dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; flex: none; align-self: center; background: var(--line); }
+  nav a .dot.ok { background: var(--ok); }
+  nav a .dot.warn { background: var(--warn); }
+  #review-summary { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-2); }
+
+  header.doc {
+    border-bottom: 3px double var(--line); padding-bottom: 28px; margin-bottom: 40px;
+  }
+  .eyebrow { font-size: 12px; letter-spacing: .18em; color: var(--accent); font-weight: 600; margin-bottom: 10px; }
+  h1 { font-size: 34px; line-height: 1.3; margin: 0 0 12px; text-wrap: balance; font-weight: 700; }
+  .lede { font-size: 16px; color: var(--ink-2); max-width: 40em; margin: 0 0 18px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 12.5px; color: var(--ink-3); }
+  .meta b { color: var(--ink-2); font-weight: 600; }
+
+  section { margin-bottom: 56px; scroll-margin-top: 24px; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 20px; }
+  .sec-head .no { font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  h2 { font-size: 22px; margin: 0; font-weight: 700; text-wrap: balance; flex: 1; }
+  h3 { font-size: 16px; margin: 26px 0 10px; font-weight: 700; }
+  p { margin: 0 0 12px; max-width: 46em; }
+  ul, ol { margin: 0 0 14px; padding-left: 1.4em; }
+  li { margin-bottom: 5px; max-width: 44em; }
+  strong { font-weight: 650; }
+
+  .stamp {
+    flex: none; font-size: 12px; padding: 3px 12px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink-3); user-select: none;
+    font-family: inherit;
+  }
+  .stamp:hover { border-color: var(--ink-3); }
+  .stamp:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .stamp[data-state="ok"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .stamp[data-state="warn"] { background: var(--amber-soft); border-color: var(--amber); color: var(--amber); font-weight: 600; }
+
+  .callout {
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 6px; padding: 14px 18px; margin: 16px 0; box-shadow: var(--shadow);
+  }
+  .callout.amber { border-left-color: var(--amber); }
+  .callout .cl-tag { font-size: 11.5px; letter-spacing: .12em; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+  .callout.amber .cl-tag { color: var(--amber); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 14px 0; }
+  .tbl-wrap { overflow-x: auto; }
+  th { text-align: left; font-size: 12px; letter-spacing: .06em; color: var(--ink-3); font-weight: 650; padding: 8px 12px; border-bottom: 2px solid var(--line); white-space: nowrap; }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:first-child { white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  td code, li code, p code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: .9em; }
+
+  pre {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 8px;
+    padding: 16px 18px; overflow-x: auto; font-size: 12.5px; line-height: 1.65; margin: 14px 0;
+  }
+  pre .c { color: var(--code-cmt); }
+  pre .k { color: #9CC5AD; }
+
+  /* ---- diagrams ---- */
+  .diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 22px; margin: 16px 0; overflow-x: auto; box-shadow: var(--shadow); }
+  .diagram .cap { font-size: 12px; color: var(--ink-3); margin-top: 12px; text-align: center; }
+  .box {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px 14px; font-size: 13px; text-align: center; line-height: 1.5;
+  }
+  .box b { display: block; font-size: 13.5px; }
+  .box small { color: var(--ink-2); font-size: 11.5px; display: block; }
+  .box.hero { background: var(--accent-soft); border-color: var(--accent); }
+  .box.hero b { color: var(--accent); }
+  .box.void { border-style: dashed; background: transparent; }
+  .box.void b { color: var(--amber); }
+  .flow { display: flex; align-items: stretch; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .flow .box { flex: 1; min-width: 130px; display: flex; flex-direction: column; justify-content: center; }
+  .arr { align-self: center; color: var(--ink-3); font-size: 16px; flex: none; }
+  .stack { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .lane { border: 1px dashed var(--line); border-radius: 8px; padding: 12px; width: 100%; }
+  .lane-tag { font-size: 11px; letter-spacing: .12em; color: var(--ink-3); font-weight: 700; margin-bottom: 8px; }
+
+  .chain { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .state { border: 1px solid var(--line); background: var(--panel-2); border-radius: 999px; padding: 3px 12px; font-size: 12.5px; white-space: nowrap; }
+  .state.terminal { border-style: double; border-width: 3px; }
+  .state.hl { background: var(--amber-soft); border-color: var(--amber); color: var(--amber); font-weight: 600; }
+
+  .phase { display: flex; gap: 0; margin: 16px 0; }
+  .phase .ph { flex: 1; border-top: 3px solid var(--line); padding: 12px 14px 0 0; }
+  .phase .ph:first-child { border-top-color: var(--accent); }
+  .phase .ph .ph-no { font-size: 11px; letter-spacing: .1em; color: var(--accent); font-weight: 700; }
+  .phase .ph h4 { margin: 2px 0 6px; font-size: 14px; }
+  .phase .ph ul { font-size: 12.5px; padding-left: 1.2em; color: var(--ink-2); }
+  @media (max-width: 700px) { .phase { flex-direction: column; gap: 14px; } .phase .ph { padding-right: 0; } }
+
+  .tree { display: flex; flex-direction: column; align-items: center; }
+  .tree .tier { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .tree .stem { width: 1px; height: 18px; background: var(--line); }
+
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 13.5px; margin: 12px 0; }
+  .kv dt { color: var(--ink-3); font-weight: 600; }
+  .kv dd { margin: 0; }
+
+  .evidence { font-size: 12.5px; color: var(--ink-3); border-top: 1px dashed var(--line); margin-top: 14px; padding-top: 8px; max-width: 46em; }
+  .evidence b { color: var(--ink-2); }
+  .num { font-variant-numeric: tabular-nums; }
+</style>
+
+<div class="wrap">
+<nav aria-label="评审目录">
+  <div class="nav-title">Milo 设计评审</div>
+  <div class="nav-sub">点击各节标题右侧印章标记审核结论</div>
+  <div id="toc"></div>
+  <div id="review-summary"></div>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">DESIGN REVIEW · 设计评审档案</div>
+  <h1>Milo：Agent 应用商店 + AI 组织指挥台</h1>
+  <p class="lede">下载（招募）或生成调教好的 Agent 成员，组建 AI 组织，编辑组织架构，统一指挥干活。核心抽象：<strong>一个 DeerFlow 实例 = 一个成员</strong>；实例内部的 agent/subagent 编排不属于本产品范围。</p>
+  <div class="meta">
+    <span><b>依据</b> 三轮调研（生态源码 · 汇报关系证据 · DSL 先例）</span>
+    <span><b>基线</b> bytedance/deer-flow main@c9b6131</span>
+    <span><b>日期</b> 2026-07-18</span>
+    <span><b>状态</b> 待评审</span>
+  </div>
+</header>
+
+<!-- ================= 01 ================= -->
+<section id="s1" data-title="调研结论与生态空位">
+  <div class="sec-head"><span class="no">01</span><h2>调研结论与生态空位</h2></div>
+  <p>字节已做好三件事：运行时（DeerFlow 2.0）、调教工具（llm-space）、包格式雏形（SKILL.md）。生态缺口恰好是本产品的两层价值：<strong>分发层</strong>与<strong>实例间编排层</strong>。</p>
+
+  <div class="diagram">
+    <div class="flow">
+      <div class="box"><b>调教</b><small>llm-space<br>本地调试/评估 IDE，成果留在本地</small></div>
+      <span class="arr">→</span>
+      <div class="box void"><b>分发：空白</b><small>Milo Registry<br>市场 · 版本 · 评级 · 质检</small></div>
+      <span class="arr">→</span>
+      <div class="box"><b>运行</b><small>DeerFlow 2.0<br>单实例 SuperAgent harness</small></div>
+      <span class="arr">→</span>
+      <div class="box void"><b>实例间编排：空白</b><small>Milo 秘书长<br>组织 · 路由 · 汇报</small></div>
+    </div>
+    <div class="cap">虚线框 = 生态空位，即 Milo 的产品位置</div>
+  </div>
+
+  <h3>三个决定性事实</h3>
+  <ul>
+    <li><strong>DeerFlow 代际断裂</strong>：2.0（2026-06）与 1.x 不共享任何代码；1.x 的 agent 硬编码在源码三处、不可分发。产品全部基于 2.0。</li>
+    <li><strong>llm-space 不是市场</strong>：是本地优先的 agent 调试/评估桌面 IDE（Thread JSON + Rubric 评分），没有任何分享机制。Milo 不与它竞争，而是消费其产出——把评测集变成市场上的"质检报告"。</li>
+    <li><strong>DeerFlow 2.0 无跨实例协同</strong>：子 agent 只在实例内动态生成，实例之间没有组织概念。</li>
+  </ul>
+  <div class="evidence"><b>证据</b>：deer-flow Star 77k / 一个版本合并 180 PR；llm-space v4.x、仅 macOS、闭环开发；均经源码/文档逐项核实。</div>
+</section>
+
+<!-- ================= 02 ================= -->
+<section id="s2" data-title="产品定义与用户旅程">
+  <div class="sec-head"><span class="no">02</span><h2>产品定义与用户旅程</h2></div>
+
+  <div class="diagram">
+    <div class="flow">
+      <div class="box"><b>① 获取成员</b><small>市场下载（招募）<br>向导生成 · llm-space 导入</small></div>
+      <span class="arr">→</span>
+      <div class="box"><b>② 组建组织</b><small>milo deploy<br>每成员一个 DeerFlow 实例</small></div>
+      <span class="arr">→</span>
+      <div class="box"><b>③ 指挥干活</b><small>自然语言下任务<br>秘书长 分解·路由·汇总</small></div>
+    </div>
+  </div>
+
+  <div class="tbl-wrap"><table>
+    <tr><th>画像</th><th>需求</th><th>对应能力</th></tr>
+    <tr><td>Agent 作者</td><td>调教成果被使用、署名、变现</td><td>发布 · 版本 · 下载统计 · 分成</td></tr>
+    <tr><td>个人 / 小团队</td><td>不会调教，直接用高质量 agent</td><td>市场搜索 · 评分 · 一键部署</td></tr>
+    <tr><td>企业团队</td><td>多 agent 协同业务流程 + 私有化</td><td>组织编排 · 私有 Registry · 审计</td></tr>
+  </table></div>
+
+  <h3>护城河（对比 prompt/GPTs 市场）</h3>
+  <ul>
+    <li><strong>带质检报告的 Agent</strong>：每个包附 llm-space 评测集，上架时平台复跑打分，下载前"验货"——市面上没有客观质量信号的先例。</li>
+    <li><strong>不止单体</strong>：下载 3 个 agent 得到的是能协同的组织，不是 3 个聊天窗口。</li>
+    <li><strong>生态红利</strong>：复用 DeerFlow 的 IM 渠道网关，组织可直接进飞书/微信群接单。</li>
+  </ul>
+
+  <h3>通用组织定位（不限于企业）</h3>
+  <p>核心抽象是<strong>组织</strong>而非公司——任何需要多个 AI 成员分工协作的场景都适用，差异全部体现在组织模板层，org.yaml schema 不为场景分叉。</p>
+  <div class="tbl-wrap"><table>
+    <tr><th>场景</th><th>组织形态示例</th><th>典型成员</th></tr>
+    <tr><td>企业职能</td><td>尽调团队 · 合规审查组 · 客服中心</td><td>调研 / 财务 / 法务 / 工单成员</td></tr>
+    <tr><td>科研</td><td>课题组</td><td>文献检索 · 实验分析 · 论文写作成员</td></tr>
+    <tr><td>内容创作</td><td>自媒体工作室</td><td>选题 · 撰稿 · 脚本 · 多平台分发成员</td></tr>
+    <tr><td>开源社区</td><td>维护小组</td><td>issue 分诊 · PR 评审 · 文档 · 发布成员</td></tr>
+    <tr><td>个人</td><td>多助理工作室</td><td>日程 · 调研 · 写作 · 学习助理</td></tr>
+  </table></div>
+</section>
+
+<!-- ================= 03 ================= -->
+<section id="s3" data-title="概念模型：实例即成员">
+  <div class="sec-head"><span class="no">03</span><h2>概念模型：实例即成员（第一设计原则）</h2></div>
+
+  <div class="diagram">
+    <div class="stack">
+      <div class="box hero" style="width: 100%;"><b>组织 Organization（一份 org.yaml）</b></div>
+      <div class="row" style="width: 100%;">
+        <div class="box" style="flex:1;"><b>秘书长</b><small>用户唯一对话入口<br>调和控制器 + 调度器<br>（Milo 运行时，非 LLM 人设）</small></div>
+        <div class="box" style="flex:1;"><b>成员 Employee</b><small>DeerFlow 实例 + MiloPack<br>（档案 / 技能证书）</small></div>
+        <div class="box" style="flex:1;"><b>部门 Department</b><small>成员的封装<br>对上表现为一个虚拟成员</small></div>
+        <div class="box" style="flex:1;"><b>制度 Policies</b><small>路由 · 流水线 · 升级<br>重试 · 限额</small></div>
+      </div>
+      <div class="stem"></div>
+      <div class="box void" style="width: 100%;"><b>成员内部（非目标）</b><small>Lead Agent · subagent · 30 个中间件——成员的"个人工作方法"，由 DeerFlow 自治，Milo 不感知、不编排、不配置</small></div>
+    </div>
+    <div class="cap">边界收敛后，Milo 与 DeerFlow 快速迭代的耦合面只剩接口一层</div>
+  </div>
+
+  <div class="callout">
+    <div class="cl-tag">隐喻链条</div>
+    <p>下载 = 招募 · MiloPack = 档案+技能证书 · 评测集 = 资格认证 · 部署 = 加入 · evals 复跑 = 绩效考核 · 销毁 = 退出。用户零学习成本。</p>
+  </div>
+
+  <h3>硬护栏（不随配置开放）</h3>
+  <ul>
+    <li>部门嵌套深度 ≤ 2；每层扇出 ≤ 5（监督幅度证据，见 06 节）</li>
+    <li>成员之间不存在直接通信通道——一切经 秘书长 路由 + artifact 交接</li>
+  </ul>
+  <div class="evidence"><b>意外印证</b>：DeerFlow 已内置实例内静态编制（<code>subagents.custom_agents</code> + agents 目录 SOUL.md），说明"实例内"这层官方自己在做——Milo 只需发明实例间的组织与路由。</div>
+</section>
+
+<!-- ================= 04 ================= -->
+<section id="s4" data-title="MiloPack 包格式">
+  <div class="sec-head"><span class="no">04</span><h2>MiloPack：Agent 交付单元</h2></div>
+  <p>在官方 SKILL.md 之上做"聚合 + 元数据 + 质检"，不发明新运行时概念——DeerFlow 升级时兼容成本最低。</p>
+
+  <pre>my-legal-agent.milopack/
+├── manifest.yaml            <span class="c"># 身份 · capabilities · 模型档位 · 权限 · 评测门槛</span>
+├── persona/system.md        <span class="c"># 主人设（→ 映射到 DeerFlow SOUL.md）</span>
+├── skills/…/SKILL.md        <span class="c"># 官方技能包原样透传</span>
+├── mcp/servers.yaml         <span class="c"># MCP 依赖声明</span>
+├── evals/*.thread.json      <span class="c"># llm-space 评测集 = 质检报告（含 rubric）</span>
+└── assets/                  <span class="c"># 图标 · README · 示例</span></pre>
+
+  <dl class="kv">
+    <dt>capabilities</dt><dd>A2A AgentCard 式结构 <code>{id, description, tags, examples}</code>——秘书长 路由的依据</dd>
+    <dt>model_requirements</dt><dd>声明档位（basic/reasoning/vision/code）而非具体模型；部署端用 model_bindings 绑定自己的模型与密钥</dd>
+    <dt>permissions</dt><dd>双重职责：安全边界 + 升级策略判定依据——作者权限声明越收敛，用户越少被打扰</dd>
+    <dt>eval.min_score</dt><dd>平台复跑低于门槛不予上架</dd>
+  </dl>
+
+  <div class="callout amber">
+    <div class="cl-tag">安全红线</div>
+    <p>包内零可执行代码（工具只引用不内嵌实现）；上架三重审查：官方 SkillScan + prompt 注入检测 + permissions 静态审查；包签名。反面证据：AutoGen 曾把 <code>source_code</code> 放进配置 → 任意代码执行 → 被官方弃用。</p>
+  </div>
+</section>
+
+<!-- ================= 05 ================= -->
+<section id="s5" data-title="系统架构">
+  <div class="sec-head"><span class="no">05</span><h2>系统架构</h2></div>
+
+  <div class="diagram">
+    <div class="stack">
+      <div class="lane">
+        <div class="lane-tag">MILO 控制面</div>
+        <div class="row">
+          <div class="box" style="flex:1;"><b>Console</b><small>市场 · 组织仪表盘<br>任务 trace · 生成向导</small></div>
+          <div class="box" style="flex:1;"><b>Registry</b><small>MiloPack 存储/版本<br>评测复跑 CI · 安全审查</small></div>
+          <div class="box hero" style="flex:1;"><b>秘书长</b><small>任务分解(LLM) · CEL 路由<br>派单 · 调和 · 汇报中枢</small></div>
+          <div class="box" style="flex:1;"><b>CLI + 鉴权</b><small>milo publish/install/deploy<br>API key / OIDC（官方无鉴权，Milo 补）</small></div>
+        </div>
+      </div>
+      <div class="stem"></div>
+      <div class="box" style="border-style:dashed; background:transparent;"><small>Member Contract：enroll / assign / status / escalate / deliver / dismiss<br>MemberAdapter 双实现——容器成员走 HTTP Gateway · 进程内成员走 DeerFlowClient</small></div>
+      <div class="stem"></div>
+      <div class="lane">
+        <div class="lane-tag">执行面（组织）</div>
+        <div class="row">
+          <div class="box" style="flex:1;"><b>法务成员</b><small>DeerFlow 实例 + MiloPack<br>容器/K8s 沙箱</small></div>
+          <div class="box" style="flex:1;"><b>财务成员</b><small>DeerFlow 实例 + MiloPack</small></div>
+          <div class="box" style="flex:1;"><b>研究成员</b><small>DeerFlow 实例 + MiloPack</small></div>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <div class="box" style="flex:1; background:transparent;"><small>共享层：Postgres（状态/审计） · Redis · 对象存储（artifact / mnt/user-data）</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <ul>
+    <li><strong>隔离即安全边界</strong>：官方 Python REPL 无沙箱、API 无鉴权 → 每成员一容器 + 网络策略按 permissions 收敛 + 控制面统一鉴权。</li>
+    <li><strong>事件一律走 SSE</strong>（Last-Event-ID 断点续传）；Redis stream bridge 是 DeerFlow 内部扇出通道、无版本化 schema，不作为集成面。</li>
+    <li><strong>任务信封为独立 schema</strong>，不依赖 DeerFlow 内部消息格式，降低版本耦合。</li>
+  </ul>
+</section>
+
+<!-- ================= 06 ================= -->
+<section id="s6" data-title="汇报关系与指挥体系">
+  <div class="sec-head"><span class="no">06</span><h2>汇报关系与指挥体系</h2></div>
+  <p>结论：<strong>层级汇报应该做，且是行业绝对共识——但价值有条件，汇报关系必须靠框架硬约束实现，不能靠 prompt 演戏。</strong></p>
+
+  <div class="diagram">
+    <div class="tree">
+      <div class="box hero"><b>用户</b><small>唯一对话对象：秘书长</small></div>
+      <div class="stem"></div>
+      <div class="box"><b>秘书长 前台</b><small>结构化任务信封：objective / 输出格式 / 边界 / 预算</small></div>
+      <div class="stem"></div>
+      <div class="tier">
+        <div class="box"><b>法务部</b><small>封装为虚拟成员<br>内部对上不可见</small></div>
+        <div class="box"><b>财务成员</b></div>
+        <div class="box"><b>研究成员</b></div>
+      </div>
+    </div>
+    <div class="cap">默认并行度 ≤ 5 · 产物写对象存储，向上只传引用 + 摘要（切断 telephone game）· 不做 supervisor-of-supervisors</div>
+  </div>
+
+  <h3>汇报协议</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>机制</th><th>设计</th><th>依据</th></tr>
+    <tr><td>双通道</td><td>阻塞事项即时单条推送（明确"需要你决定什么"）；进度批量拉取，绝不弹窗</td><td>中断恢复平均 23 分钟（Mark, CHI'08）</td></tr>
+    <tr><td>三槽位状态</td><td>固定格式：在做什么 / 为什么 / 置信度与风险</td><td>SAT 透明度模型：提升信任校准且不增负荷</td></tr>
+    <tr><td>升级稀缺化</td><td>可逆性 × 外部影响 × 置信度 × 成本四维判定；override 率为健康指标</td><td>CDSS 弹窗 90% 被 override 的反面教材</td></tr>
+    <tr><td>计划前置授权</td><td>长任务先出可编辑计划，批准即授权到里程碑；偏离必须重新上报</td><td>Devin / Magentic-UI 模式</td></tr>
+    <tr><td>拓扑自适应</td><td>可并行任务并行派单；强串行任务单成员承接 + 其余只读支援</td><td>串行任务上多 agent 劣化 39–70%（Google）</td></tr>
+  </table></div>
+
+  <div class="evidence"><b>量化证据</b>：中心化协调在可并行任务 +80~90%，错误放大 17.2× → 4.4×；纯树形拓扑在 MultiAgentBench 垫底；监督幅度三条独立证据链（无人机 2–4 · Graicunas 5–6 · 业界实践 3–5）收敛于 ≤5。反面教材：CrewAI 给 LLM 一个 manager 人设 → 不委派、抢活干、随语言漂移（Issues #4783/#1057）。</div>
+</section>
+
+<!-- ================= 07 ================= -->
+<section id="s7" data-title="org.yaml 编制文件规范">
+  <div class="sec-head"><span class="no">07</span><h2>org.yaml：可编辑的编制文件</h2></div>
+  <p>用户可以编辑组织架构——但开放的是<strong>策略编辑</strong>而非自由连汇报线。三档：L1 自动（默认，无需编辑）→ L2 声明式（org.yaml + 表单）→ L3 封装式层级（部门）。</p>
+
+  <pre><span class="k">apiVersion:</span> milo.dev/v1alpha1        <span class="c"># 毕业制 v1alpha1 → v1beta1 → v1</span>
+<span class="k">kind:</span> Organization
+<span class="k">metadata:</span> {name: due-diligence-inc, version: 1.3.0}
+<span class="k">spec:</span>
+  <span class="k">members:</span>
+    - name: market-researcher
+      pack: registry.milo.dev/market-researcher@sha256:ab12…   <span class="c"># 强制版本 pin</span>
+      runtime: {mode: container, model_bindings: {reasoning: deepseek-r1}}
+  <span class="k">departments:</span>
+    - name: legal
+      uses: registry.milo.dev/teams/legal-review@1.2.0          <span class="c"># 成建制引用</span>
+      inputs:  [{name: contract_files, type: artifact, required: true}]
+      outputs: [{name: review_report, type: artifact}]
+  <span class="k">routing:</span>
+    rules:                                                      <span class="c"># 有序匹配，CEL 求值</span>
+      - {match: 'task.capability in ["contract-review"]', assign: legal}
+    default: ask_user                                           <span class="c"># 必填兜底</span>
+  <span class="k">pipelines:</span>
+    - name: full-dd-report
+      tasks:
+        - {name: collect, assign: research}
+        - name: legal-review
+          assign: legal
+          depends: "collect.Succeeded"                          <span class="c"># Argo 式状态谓词</span>
+          inputs: {contract_files: "${tasks.collect.outputs.artifacts.contracts}"}
+  <span class="k">escalation:</span>
+    policies:
+      - {name: external-side-effect, when: 'action.permissions.network_external', actions: [block]}
+      - {name: low-confidence, when: 'report.confidence &lt; 0.6', actions: [escalate]}
+      - {name: budget-80pct, when: 'usage.tokens &gt; task.budget.tokens * 0.8', actions: [warn]}
+  <span class="k">limits:</span> {maxParallelMembers: 5, maxDepartmentDepth: 2, pendingQueueBackpressure: 3}
+<span class="k">status:</span>                                                        <span class="c"># 仅 秘书长 可写</span>
+  observedGeneration: 3
+  members: [{name: legal, conditions: [{type: Ready, status: "True"}]}]</pre>
+
+  <h3>规范落实的十条铁律（来自 DSL 先例调研）</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>#</th><th>铁律</th><th>正 / 反面来源</th></tr>
+    <tr><td class="num">1</td><td>配置零可执行代码</td><td>反面：AutoGen FunctionTool source_code 被弃用</td></tr>
+    <tr><td class="num">2</td><td>表达式语言全 DSL 只用一门：CEL</td><td>正面：K8s KEP-3488；反面：Argo 三套语法并存</td></tr>
+    <tr><td class="num">3</td><td>结构化值层面求值，禁文本拼接</td><td>反面：Argo 炸引号、GHA 表达式注入</td></tr>
+    <tr><td class="num">4</td><td>长 prompt 放 Markdown 正文不放 YAML 字段</td><td>正面：Claude Code frontmatter+正文</td></tr>
+    <tr><td class="num">5</td><td>产物双通道：parameters + artifacts，大件强制引用</td><td>正面：Argo；反面：ASL 256KB 限制</td></tr>
+    <tr><td class="num">6</td><td>封装接口类型化 + 引用强制版本 pin</td><td>正面：GHA reusable workflow；反面：Argo 无 pin</td></tr>
+    <tr><td class="num">7</td><td>部门与成员同构递归</td><td>正面：AutoGen ComponentModel</td></tr>
+    <tr><td class="num">8</td><td>spec/status 分离 + 控制器调和</td><td>正面：K8s CRD/Operator</td></tr>
+    <tr><td class="num">9</td><td>策略正交双维度（failurePolicy vs actions），支持 warn 灰度</td><td>正面：K8s ValidatingAdmissionPolicy</td></tr>
+    <tr><td class="num">10</td><td>版本毕业制 + 无损往返 + 导入兼容分级</td><td>正面：K8s 废弃政策 + Dify DSL</td></tr>
+  </table></div>
+
+  <div class="callout">
+    <div class="cl-tag">路由的关键取舍</div>
+    <p>LLM 只做任务分解（产出带 capability 的任务信封）；<strong>信封 → 成员的匹配是确定性 CEL 求值</strong>。语义理解与路由执行分离——规避 Coze"跳转边画在图上、实际靠 LLM 猜"的不可调试性。</p>
+  </div>
+</section>
+
+<!-- ================= 08 ================= -->
+<section id="s8" data-title="Member Contract 与映射">
+  <div class="sec-head"><span class="no">08</span><h2>Member Contract：六动作与 DeerFlow 落点</h2></div>
+  <p>Milo 与成员之间的唯一接口。适配层双实现：容器成员（HTTP Gateway，生产）/ 进程内成员（DeerFlowClient 嵌入，本地与 MVP）。</p>
+
+  <div class="tbl-wrap"><table>
+    <tr><th>动作</th><th>语义</th><th>容器成员落点（源码核实）</th></tr>
+    <tr><td><code>enroll</code></td><td>加入</td><td>起容器 → MiloPack 渲染 config.yaml → <code>POST /api/agents</code>（persona → SOUL.md）→ <code>PUT /api/skills/custom/{name}</code> → <code>/api/mcp/config</code></td></tr>
+    <tr><td><code>assign</code></td><td>派单</td><td><code>POST /api/threads</code> → goal → <code>POST …/runs/stream</code>（assistant_id 选 persona · webhook 回调 · multitask_strategy: reject）</td></tr>
+    <tr><td><code>status</code></td><td>三槽位汇报</td><td>SSE 消费；断线 <code>GET …/runs/{id}/stream</code> + Last-Event-ID 续传；适配层归一化</td></tr>
+    <tr><td><code>escalate</code></td><td>决策上抛</td><td>澄清/中断类事件 + 终止原因 → 归一化为 input-required。<strong>事件形态 = spike 首要验证项</strong></td></tr>
+    <tr><td><code>deliver</code></td><td>交付</td><td>webhook → <code>workspace-changes</code> 变更清单 → <code>GET …/artifacts/mnt/user-data/outputs/…</code> → 按 output_spec 校验</td></tr>
+    <tr><td><code>dismiss</code></td><td>退出</td><td>归档 thread → 销毁容器</td></tr>
+  </table></div>
+
+  <h3>任务状态机（借 A2A 裁剪，终态不复活）</h3>
+  <div class="diagram">
+    <div class="chain">
+      <span class="state">queued</span><span class="arr">→</span>
+      <span class="state">assigned</span><span class="arr">→</span>
+      <span class="state">working</span><span class="arr">⇄</span>
+      <span class="state hl">input-required（escalate）</span><span class="arr">→</span>
+      <span class="state">delivered</span><span class="arr">→</span>
+      <span class="state terminal">accepted</span>
+    </div>
+    <div class="chain" style="margin-top:10px;">
+      <span style="font-size:12px;color:var(--ink-3);">任一活跃态 ↘</span>
+      <span class="state terminal">failed</span>
+      <span class="state terminal">canceled</span>
+      <span class="state terminal">rejected</span>
+      <span style="font-size:12px;color:var(--ink-3);">— 后续工作创建新任务，以 context_id 关联、parent_task 回指</span>
+    </div>
+    <div class="cap">打扰路径同样遵守层级：subagent 的问题先汇聚到实例 Lead，再以成员身份 escalate；Milo 不接收 subagent 级信号</div>
+  </div>
+
+  <h3>任务信封（结构化委派四要素为 schema 强制）</h3>
+  <pre>{ "task_id": "t-8f3a", "parent_task": "t-8f00", "context_id": "ctx-a1",
+  "capability": "contract-review",
+  "objective": "审查 X 组织股权转让协议中的对赌条款风险",
+  "output_spec": {"format": "markdown", "artifacts": ["review_report"]},
+  "inputs": {"parameters": {…}, "artifacts": [{"name": "contracts", "uri": "s3://…"}]},
+  "budget": {"tokens": 500000, "deadline": "…"},
+  "constraints": ["不得访问外部网络", "引用需注明条款编号"] }</pre>
+</section>
+
+<!-- ================= 09 ================= -->
+<section id="s9" data-title="秘书长 调和架构">
+  <div class="sec-head"><span class="no">09</span><h2>秘书长：调和控制器 + 调度器</h2></div>
+
+  <div class="diagram">
+    <div class="flow">
+      <div class="box"><b>spec</b><small>org.yaml 期望编制<br>（用户写）</small></div>
+      <span class="arr">→</span>
+      <div class="box hero"><b>调和循环</b><small>缺员 enroll · 裁撤 dismiss<br>pack 变更滚动替换<br>（先 enroll 新 → Ready → dismiss 旧）</small></div>
+      <span class="arr">→</span>
+      <div class="box"><b>status</b><small>实际组织状态<br>conditions + observedGeneration<br>（仅 秘书长 写）</small></div>
+    </div>
+    <div class="cap">成员加入先跑 MiloPack 自带 evals（冒烟）才置 Ready——"试用期"语义，复用包内质检报告</div>
+  </div>
+
+  <ul>
+    <li><strong>调和与调度分离</strong>：调和管"组织编制符合 org.yaml"；调度管"用户请求 → LLM 任务分解 → CEL 路由 → 派发 → 汇总交付"。</li>
+    <li>待批队列背压：超过 <code>pendingQueueBackpressure</code> 自动降并行、提高成员自主档位。</li>
+  </ul>
+
+  <div class="callout">
+    <div class="cl-tag">现实身份定位</div>
+    <p>秘书长（系统名 Secretariat，原 Conductor）≈ <strong>办公室主任 / 幕僚长（Chief of Staff）</strong>：不是经理（无自主方向，权力全部来自用户授权且范围写在制度里）、不是成员（不干具体的活）。职责六项——听懂任务（唯一用 LLM）、派单、跟进汇总、挡驾与请示、人事执行（<strong>人事决定权只属于用户</strong>：招募/请离/版本变更一律用户发起，秘书长仅执行、可建议、禁止自动变动）、验收交付；除第一项外全部是照章执行的确定性代码，"制度长了手脚"，没有"主张"这个功能。</p>
+  </div>
+</section>
+
+<!-- ================= 10 ================= -->
+<section id="s10" data-title="Console 编辑器与校验">
+  <div class="sec-head"><span class="no">10</span><h2>Console 编辑器：不做连线画布</h2></div>
+  <p>调研证据一边倒：Flowise supervisor 画布整体废弃、n8n 主动删配置维度、Coze multi-agent 画布未进开源版、LangChain 官方发文拒绝画布。</p>
+
+  <div class="diagram">
+    <div class="row">
+      <div class="box" style="flex:1;"><b>组织图（只读）</b><small>自动布局的组织→部门→成员树<br>叠加运行状态：谁在忙 · 待批事项 · 打扰计数<br>用于看，不用于编辑</small></div>
+      <div class="box" style="flex:1;"><b>表单编辑</b><small>成员 · model_bindings · 路由<br>条件构建器生成 CEL<br>高级用户直写表达式</small></div>
+      <div class="box" style="flex:1;"><b>文件模式</b><small>org.yaml 直接编辑<br>与表单双向同步<br>git 可 diff、可 code review</small></div>
+    </div>
+  </div>
+
+  <h3>校验三级</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>时机</th><th>检查内容</th></tr>
+    <tr><td>编辑时 lint</td><td>引用不存在的成员 · 路由环 · 深度/扇出超限 · CEL 类型错误 · 无 default 的 routing · 引用 Skipped 输出 · YAML 1.1 布尔陷阱</td></tr>
+    <tr><td>发布 checklist</td><td>服务端真实依赖校验（Dify 前端校验漏判的教训）：pack 存在且过 SkillScan · 路由覆盖缺口 · model_bindings 绑全 · 语义警告（全 block 策略 = 打扰风暴预测）</td></tr>
+    <tr><td>运行时 guard</td><td>escalation 策略求值 + failurePolicy 兜底</td></tr>
+  </table></div>
+</section>
+
+<!-- ================= 11 ================= -->
+<section id="s11" data-title="MVP 路线图">
+  <div class="sec-head"><span class="no">11</span><h2>MVP 路线图</h2></div>
+  <div class="phase">
+    <div class="ph">
+      <div class="ph-no">PHASE 1 · 0–3 月</div>
+      <h4>让 agent 能流通</h4>
+      <ul>
+        <li>MiloPack v1 规范 + 校验器</li>
+        <li>milo publish / install / import / run</li>
+        <li>Registry 最小版 + 评测复跑 CI</li>
+        <li>自营种子内容 10–20 包</li>
+        <li>指标：外部作者发布数 · 7 日留存</li>
+      </ul>
+    </div>
+    <div class="ph">
+      <div class="ph-no">PHASE 2 · 3–6 月</div>
+      <h4>让 agent 能组队</h4>
+      <ul>
+        <li>组织部署（K8s / docker-compose）</li>
+        <li>org.yaml + 秘书长 + DAG 流水线</li>
+        <li>Console：仪表盘 · trace 回放</li>
+        <li>鉴权 + 审计（企业刚需）</li>
+        <li>指标：多成员任务占比 · 打扰次数 · override 率 · 待批时长</li>
+      </ul>
+    </div>
+    <div class="ph">
+      <div class="ph-no">PHASE 3 · 6–12 月</div>
+      <h4>市场化运营</h4>
+      <ul>
+        <li>评分 · 付费分成 · 私有 Registry</li>
+        <li>竞争/评审协同模式</li>
+        <li>组织模板成建制分发</li>
+        <li>IM 集成：组织进飞书/微信群接单</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 12 ================= -->
+<section id="s12" data-title="风险与 Spike 清单">
+  <div class="sec-head"><span class="no">12</span><h2>风险与 Spike 清单</h2></div>
+
+  <div class="tbl-wrap"><table>
+    <tr><th>风险</th><th>评估</th><th>对策</th></tr>
+    <tr><td>DeerFlow 迭代过快</td><td>高</td><td>合同只依赖公开端点；config_version 模板矩阵；MiloPack 只聚合官方概念</td></tr>
+    <tr><td>恶意包 / 供应链</td><td>高</td><td>三重审查 + 容器隔离 + 包签名 + 配置零代码</td></tr>
+    <tr><td>双边市场冷启动</td><td>高</td><td>单边价值先行（生成向导 + 编排自用成立）+ 自营种子</td></tr>
+    <tr><td>字节官方下场做市场</td><td>中</td><td>差异化押质检 + 实例间编排 + 企业私有化</td></tr>
+    <tr><td>llm-space 格式变动</td><td>中</td><td>导入层版本适配器；内部存规范化格式</td></tr>
+  </table></div>
+
+  <h3>Spike 验证项（优先级排序）</h3>
+  <ol>
+    <li><strong>escalate 事件形态</strong>：起一实例，构造需澄清任务，抓全 SSE 事件流——全案唯一未核实的合同环节</li>
+    <li>enroll 全链路自动化：MiloPack → config.yaml 渲染 + /api/agents + skills 安装</li>
+    <li>进程内 / 容器双实现的行为一致性</li>
+    <li>webhook 可靠性与 deliver 产物完整性校验</li>
+    <li>CEL 引擎选型：cel-python 仅 Beta → conformance 测试集验收，或 Go sidecar</li>
+  </ol>
+</section>
+
+<!-- ================= 13 ================= -->
+<section id="s13" data-title="决策溯源速查">
+  <div class="sec-head"><span class="no">13</span><h2>决策溯源速查</h2></div>
+  <div class="tbl-wrap"><table>
+    <tr><th>设计点</th><th>证据来源</th></tr>
+    <tr><td>实例即成员、不编排内部</td><td>DeerFlow 已内置实例内编制；耦合面收敛</td></tr>
+    <tr><td>单领队 · 扁平 · ≤5 · 深度≤2</td><td>Anthropic/Claude Code/Devin/Manus 共识；Cummings 2–4；Graicunas 5–6；MultiAgentBench 树形垫底</td></tr>
+    <tr><td>部门=封装 + 类型化接口 + 强制 pin</td><td>AutoGen SocietyOfMind + GHA reusable workflow；Argo 无 pin 反例</td></tr>
+    <tr><td>CEL 唯一表达式语言</td><td>K8s KEP-3488；Argo 三套语法反例；GHA 注入反例</td></tr>
+    <tr><td>产物双通道、大件引用化</td><td>Argo parameters/artifacts；ASL 256KB 反例</td></tr>
+    <tr><td>路由 = LLM 分解 + 确定性匹配</td><td>Coze 跳转边反例；CrewAI manager 人设反例</td></tr>
+    <tr><td>升级策略正交双维度 + 灰度</td><td>K8s failurePolicy / validationActions</td></tr>
+    <tr><td>spec/status + 调和循环</td><td>K8s CRD / Operator</td></tr>
+    <tr><td>不做画布，文件+表单+只读图</td><td>Flowise V1 废弃；n8n 收敛；LangChain 拒绝画布</td></tr>
+    <tr><td>任务状态机、终态不复活</td><td>A2A Task 生命周期</td></tr>
+    <tr><td>双通道汇报 · 三槽位 · 升级稀缺化</td><td>Mark CHI'08 中断成本；SAT 透明度实验；CDSS 90% override 反例</td></tr>
+    <tr><td>结构化委派四要素</td><td>Anthropic 多 agent 系统工程博客</td></tr>
+  </table></div>
+  <p style="font-size:12.5px; color:var(--ink-3); margin-top:16px;">完整论证与来源 URL 见《milo-产品方案.md》《milo-编制体系详细设计.md》及三轮调研报告。</p>
+</section>
+</main>
+</div>
+
+<script>
+(function () {
+  var STORE = 'milo-review-v1';
+  var states = {};
+  try { states = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) {}
+  var LABELS = { none: '未审', ok: '通过', warn: '有意见' };
+  var NEXT = { none: 'ok', ok: 'warn', warn: 'none' };
+  var sections = Array.prototype.slice.call(document.querySelectorAll('section[id]'));
+  var toc = document.getElementById('toc');
+
+  sections.forEach(function (sec, i) {
+    var id = sec.id, title = sec.getAttribute('data-title');
+    var st = states[id] || 'none';
+
+    var btn = document.createElement('button');
+    btn.className = 'stamp';
+    btn.type = 'button';
+    btn.setAttribute('aria-label', title + ' 审核状态');
+    sec.querySelector('.sec-head').appendChild(btn);
+
+    var a = document.createElement('a');
+    a.href = '#' + id;
+    a.innerHTML = '<span class="no">' + String(i + 1).padStart(2, '0') + '</span><span>' + title + '</span><span class="dot"></span>';
+    toc.appendChild(a);
+
+    function paint() {
+      btn.textContent = LABELS[st];
+      btn.setAttribute('data-state', st === 'none' ? '' : st);
+      var dot = a.querySelector('.dot');
+      dot.className = 'dot' + (st === 'none' ? '' : ' ' + st);
+      summarize();
+    }
+    btn.addEventListener('click', function () {
+      st = NEXT[st];
+      states[id] = st;
+      try { localStorage.setItem(STORE, JSON.stringify(states)); } catch (e) {}
+      paint();
+    });
+    sec._paint = paint;
+    paint();
+  });
+
+  function summarize() {
+    var ok = 0, warn = 0;
+    sections.forEach(function (s) {
+      var v = states[s.id] || 'none';
+      if (v === 'ok') ok++; else if (v === 'warn') warn++;
+    });
+    var el = document.getElementById('review-summary');
+    el.textContent = '审核进度：通过 ' + ok + ' · 有意见 ' + warn + ' · 未审 ' + (sections.length - ok - warn) + ' / 共 ' + sections.length + ' 节';
+  }
+  summarize();
+})();
+</script>

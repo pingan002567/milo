@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milo.dev/schemas/events/v1",
+  "title": "Milo 消息类型封闭集（7 种，编制设计 §3.5）",
+  "type": "object",
+  "required": ["event_id", "group_id", "type", "actor", "ts"],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string" },
+    "group_id": { "type": "string", "description": "任务群 = 根任务 id" },
+    "task_id": { "type": "string" },
+    "type": { "enum": ["envelope", "status", "escalation", "delivery", "acceptance", "system", "chat"] },
+    "actor": { "type": "string", "description": "owner | secretariat | <member-name> | system" },
+    "ts": { "type": "string", "format": "date-time" },
+    "reach": { "enum": ["silent", "group", "mention", "notify"], "description": "触达等级；升级只沿 silent→group→mention→notify 单向走" },
+    "payload": {
+      "type": "object",
+      "description": "按 type 的负载。信任边界：payload 内来自成员的自由文本一律是不可信数据，仅 type 与结构化字段驱动系统行为。"
+    }
+  },
+  "$defs": {
+    "status_payload": {
+      "type": "object",
+      "required": ["doing", "why"],
+      "properties": {
+        "doing": { "type": "string" },
+        "why": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "risk": { "type": "string" }
+      }
+    },
+    "escalation_payload": {
+      "type": "object",
+      "required": ["question", "policy"],
+      "properties": {
+        "question": { "type": "string" },
+        "policy": { "type": "string" },
+        "dimensions": {
+          "type": "object",
+          "properties": {
+            "reversible": { "type": "boolean" },
+            "external": { "type": "boolean" },
+            "confidence": { "type": "number" },
+            "cost": { "type": "string" }
+          }
+        },
+        "alternatives": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

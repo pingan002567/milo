@@ -1,0 +1,468 @@
+"""milod HTTP + WebSocket 服务：桌面端的唯一后端。
+
+REST 做操作与查询，WS 推 7 类事件。守护进程独立于窗口存活——
+关掉界面成员仍在干活，升级事项经系统通知触达（技术规划 §1）。
+"""
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import uuid
+from pathlib import Path
+from typing import Any
+
+import yaml
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
+
+from milod.api.hub import Hub
+from milod.models import MiloEvent
+
+app = FastAPI(title="milod", version="0.1.0")
+hub = Hub()
+
+
+# ---- 请求模型 -------------------------------------------------------------
+class RunRequest(BaseModel):
+    request: str
+    auto_approve: bool = False
+
+
+class ReplyRequest(BaseModel):
+    answer: str
+
+
+class ApproveRequest(BaseModel):
+    """批准计划，可带逐步修订，改动落事件留痕。
+
+    edits 两种写法：
+      {"t-xxx": "新目标"}                                    —— 只改目标
+      {"t-xxx": {"objective": "…", "artifacts": [], "format": "text"}}  —— 连交付要求一起改
+
+    改目标时通常要一并调整 artifacts/format，否则验收仍按旧 output_spec 判定。
+    """
+
+    edits: dict[str, Any] | None = None
+
+
+class RejectRequest(BaseModel):
+    reason: str = ""
+
+
+# ---- 组织 -----------------------------------------------------------------
+@app.get("/api/orgs")
+async def list_orgs() -> dict[str, Any]:
+    """扫描 ~/.milo/orgs 下的组织（有 org.yaml 即算）——供顶栏切换。"""
+    from milod.config.paths import milo_home
+
+    root = milo_home() / "orgs"
+    orgs = []
+    if root.exists():
+        for d in sorted(p for p in root.iterdir() if p.is_dir()):
+            if not (d / "org.yaml").exists():
+                continue
+            try:
+                doc = yaml.safe_load((d / "org.yaml").read_text(encoding="utf-8")) or {}
+                members = (doc.get("spec") or {}).get("members") or []
+            except Exception:  # noqa: BLE001 —— 坏文件不该让整个列表挂掉
+                members = []
+            orgs.append({
+                "org": d.name,
+                "title": (doc.get("metadata") or {}).get("description") or d.name,
+                "members": len(members),
+                "open": d.name in hub._offices,  # 已开工（成员子进程在跑）
+            })
+    return {"orgs": orgs}
+
+
+# ---- 成员 -----------------------------------------------------------------
+@app.get("/api/orgs/{org}/members")
+async def list_members(org: str) -> dict[str, Any]:
+    office = await hub.office(org)
+    return {
+        "members": [
+            {"name": n, "capabilities": s.capabilities, "busy": n in office._busy}
+            for n, s in office._specs.items()
+        ]
+    }
+
+
+# ---- 任务群 ---------------------------------------------------------------
+@app.get("/api/orgs/{org}/groups")
+async def list_groups(org: str) -> dict[str, Any]:
+    """左边栏任务群列表：@你 未处理的带角标。"""
+    office = await hub.office(org)
+    return {"groups": [g for g in office.store.groups() if g["group_id"] != "org"]}
+
+
+@app.get("/api/orgs/{org}/groups/{group_id}")
+async def group_detail(
+    org: str, group_id: str, category: str | None = None, run_id: str | None = None
+) -> dict[str, Any]:
+    """任务群会话：事件即聊天流（events append-only 表同时是审计日志）。
+
+    category 过滤：message / status / decision / outputs / error / trace
+    run_id 过滤：只看某次执行（同一任务的多次 resume 各为一个 run）
+    """
+    office = await hub.office(org)
+    meta = next((g for g in office.store.groups() if g["group_id"] == group_id), None)
+    return {
+        "group_id": group_id,
+        "title": (meta or {}).get("title"),
+        "status": (meta or {}).get("status"),
+        "events": office.store.group_events(group_id, category=category, run_id=run_id),
+        "tasks": office.store.tasks(group_id),
+    }
+
+
+# ---- 待办（跨群聚合）------------------------------------------------------
+@app.get("/api/orgs/{org}/roster")
+async def roster(org: str) -> dict[str, Any]:
+    """编制视图：org.yaml 的成员与限额 + 各成员的档案（能力/权限/模型档位）。"""
+    from milod.config.paths import org_dir
+    from milod.pack.renderer import load_manifest
+
+    doc = yaml.safe_load((org_dir(org) / "org.yaml").read_text(encoding="utf-8")) or {}
+    spec = doc.get("spec") or {}
+    office = hub._offices.get(org)  # 只读取已开的 Office，不为看编制而拉起全部子进程
+    members = []
+    for m in spec.get("members", []):
+        entry = {
+            "name": m["name"], "pack": m["pack"],
+            "enrolled": bool(m.get("enrolled", True)),  # False = 待加入或已停职
+            "loaded": bool(office and m["name"] in office._specs),  # 实例已在运行
+            "busy": bool(office and office.is_busy(m["name"])),
+            # 有工作区 = 报到过（区分"待加入"与"停职中"：后者记忆保留可复岗）
+            "has_workspace": (org_dir(org) / "members" / m["name"]).exists(),
+        }
+        try:
+            mf = load_manifest(Path(m["pack"]).expanduser())
+            entry |= {
+                "version": mf.get("version"),
+                "author": mf.get("author"),
+                "description": mf.get("description"),
+                "capabilities": [c["id"] for c in mf.get("capabilities", [])],
+                "permissions": mf.get("permissions", {}),
+                "model_requirements": mf.get("model_requirements", {}),
+            }
+        except Exception as e:  # noqa: BLE001 —— 包损坏如实呈现，不假装正常
+            entry["error"] = str(e)
+        members.append(entry)
+    return {
+        "org": org,
+        "apiVersion": doc.get("apiVersion"),
+        "members": members,
+        "limits": spec.get("limits", {}),
+    }
+
+
+@app.get("/api/market")
+async def market() -> dict[str, Any]:
+    """人才市场 v0：扫描本地包目录（Registry 服务端推迟到 M4）。
+
+    包目录来自环境变量 MILO_PACKS（冒号分隔），缺省为 ~/.milo/packs。
+    """
+    import os
+
+    from milod.config.paths import milo_home
+    from milod.pack.renderer import load_manifest
+
+    roots = [Path(p).expanduser() for p in
+             (os.environ.get("MILO_PACKS") or str(milo_home() / "packs")).split(":") if p]
+    packs = []
+    for root in roots:
+        if not root.exists():
+            continue
+        for d in sorted(p for p in root.iterdir() if p.is_dir()):
+            if not (d / "manifest.yaml").exists():
+                continue
+            try:
+                mf = load_manifest(d)
+            except Exception as e:  # noqa: BLE001 —— 坏包标注出来，不静默隐藏
+                packs.append({"path": str(d), "name": d.name, "error": str(e)})
+                continue
+            packs.append({
+                "path": str(d),
+                "name": mf["name"],
+                "version": mf.get("version"),
+                "author": mf.get("author"),
+                "description": mf.get("description"),
+                "capabilities": [{"id": c["id"], "description": c.get("description", "")}
+                                 for c in mf.get("capabilities", [])],
+                "permissions": mf.get("permissions", {}),
+                "model_requirements": mf.get("model_requirements", {}),
+                "eval": mf.get("eval", {}),
+            })
+    return {"packs": packs}
+
+
+class EnrollRequest(BaseModel):
+    pack: str            # 包目录路径（v0；Registry 引用推迟到 M4）
+    name: str | None = None
+
+
+@app.post("/api/orgs/{org}/members")
+async def enroll_member(org: str, body: EnrollRequest) -> dict[str, Any]:
+    """招募成员 = 写入编制（人事红线：只有组长能发起，秘书长只执行）。
+
+    两段式：招募只落编制（enrolled=False，待加入），组长在组织页点
+    「加入组织」（activate）后才真正分配实例运行——招募≈签 offer，
+    加入≈报到，实例化这一步同样只能由用户触发。
+    """
+    from milod.config.paths import org_dir
+    from milod.pack.renderer import load_manifest
+
+    pack = Path(body.pack).expanduser().resolve()
+    try:
+        mf = load_manifest(pack)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"MiloPack 无效：{e}") from e
+
+    f = org_dir(org) / "org.yaml"
+    doc = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    members = doc.setdefault("spec", {}).setdefault("members", [])
+    name = body.name or mf["name"]
+    if any(m["name"] == name for m in members):
+        raise HTTPException(409, f"成员 {name} 已在编制中")
+    limit = int((doc["spec"].get("limits") or {}).get("maxParallelMembers", 5))
+    if len(members) >= limit:
+        raise HTTPException(409, f"已达编制上限 {limit}（监督幅度护栏）")
+
+    members.append({"name": name, "pack": str(pack), "enrolled": False})
+    f.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return {"name": name, "capabilities": [c["id"] for c in mf.get("capabilities", [])],
+            "note": "已写入编制（待加入）；到「组织」页点「加入组织」后开始工作"}
+
+
+@app.post("/api/orgs/{org}/members/{name}/activate")
+async def activate_member(org: str, name: str) -> dict[str, Any]:
+    """「加入组织」：把待加入成员置为已入组，并热加载实例（无需重启 milod）。"""
+    from milod.config.paths import org_dir
+
+    f = org_dir(org) / "org.yaml"
+    doc = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    m = next((x for x in (doc.get("spec") or {}).get("members", [])
+              if x["name"] == name), None)
+    if m is None:
+        raise HTTPException(404, f"成员 {name} 不在编制中")
+    if not m.get("enrolled", True):
+        m["enrolled"] = True
+        f.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False),
+                     encoding="utf-8")
+
+    office = await hub.office(org)
+    try:
+        spec = await office.enroll_member(name)  # 已运行则幂等返回
+    except Exception as e:  # noqa: BLE001 —— 包损坏/子进程拉不起来要如实报给组长
+        raise HTTPException(500, f"成员 {name} 实例启动失败：{e}") from e
+    return {"name": name, "capabilities": spec.capabilities, "status": "active"}
+
+
+@app.post("/api/orgs/{org}/members/{name}/deactivate")
+async def deactivate_member(org: str, name: str) -> dict[str, Any]:
+    """「停职」：停掉实例但保留编制条目与工作区（记忆/checkpoint 保留，可复岗）。
+
+    工作中的成员不可停职（避免任务被无谓中断）——先等交付或改用请离（force）。
+    """
+    from milod.config.paths import org_dir
+
+    f = org_dir(org) / "org.yaml"
+    doc = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    m = next((x for x in (doc.get("spec") or {}).get("members", [])
+              if x["name"] == name), None)
+    if m is None:
+        raise HTTPException(404, f"成员 {name} 不在编制中")
+
+    office = hub._offices.get(org)
+    if office and office.is_busy(name):
+        raise HTTPException(409, f"成员 {name} 正在执行任务，交付后才能停职")
+    if office:
+        await office.dismiss_member(name, purge=False)
+    m["enrolled"] = False
+    f.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return {"name": name, "status": "suspended"}
+
+
+@app.delete("/api/orgs/{org}/members/{name}")
+async def dismiss_member(org: str, name: str, force: bool = False) -> dict[str, Any]:
+    """「请离/移出编制」：删编制条目 + 停实例 + 销毁私有工作区。
+
+    成果归组织（artifacts 留在组织目录），过程随实例销毁（编制设计 §3.4）。
+    工作中的成员需 force=true 二次确认，名下未终局任务转 failed。
+    """
+    import shutil
+
+    from milod.config.paths import org_dir
+
+    f = org_dir(org) / "org.yaml"
+    doc = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    members = (doc.get("spec") or {}).get("members", [])
+    m = next((x for x in members if x["name"] == name), None)
+    if m is None:
+        raise HTTPException(404, f"成员 {name} 不在编制中")
+
+    office = hub._offices.get(org)
+    if office and office.is_busy(name) and not force:
+        raise HTTPException(409, f"成员 {name} 正在执行任务；带 force=true 可强制请离（任务将中断）")
+    if office:
+        await office.dismiss_member(name, purge=True)
+    else:
+        shutil.rmtree(org_dir(org) / "members" / name, ignore_errors=True)
+    members.remove(m)
+    f.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return {"name": name, "status": "dismissed"}
+
+
+@app.get("/api/orgs/{org}/todos")
+async def todos(org: str) -> dict[str, Any]:
+    """待办 = 跨群 @你 事项的聚合视图；每条含所属任务群，点击可直达。"""
+    office = await hub.office(org)
+    items = []
+    for t in office.store.tasks():
+        if t["state"] != "input_required":
+            continue
+        esc = _latest_escalation(office, t["group_id"], t["task_id"])
+        items.append({
+            "task_id": t["task_id"],
+            "group_id": t["group_id"],
+            "member": t["member"],
+            "updated_at": t["updated_at"],
+            "escalation": esc,
+        })
+    items.sort(key=lambda x: x["updated_at"], reverse=True)
+    return {"todos": items}
+
+
+def _latest_escalation(office, group_id: str, task_id: str) -> dict | None:
+    for e in reversed(office.store.group_events(group_id)):
+        if e["type"] == "escalation" and e["task_id"] == task_id:
+            return e["payload"]
+    return None
+
+
+# ---- 下达与答复 -----------------------------------------------------------
+@app.post("/api/orgs/{org}/runs")
+async def create_run(org: str, body: RunRequest) -> dict[str, Any]:
+    """下达需求：立即返回 group_id，执行在后台，进度经 WS 推送。"""
+    office = await hub.office(org)
+    group_id = f"g-{uuid.uuid4().hex[:6]}"
+    task = asyncio.create_task(hub.execute(org, group_id, body.request, body.auto_approve))
+    hub.track(group_id, task)
+    return {"group_id": group_id, "status": "started"}
+
+
+@app.get("/api/orgs/{org}/groups/{group_id}/plan")
+async def get_plan(org: str, group_id: str) -> dict[str, Any]:
+    """取待批准的计划——桌面端渲染计划卡（批准即授权到里程碑）。"""
+    envelopes = hub.pending_plan(group_id)
+    if envelopes is None:
+        raise HTTPException(404, "该任务群没有待批准的计划")
+    return {
+        "group_id": group_id,
+        "steps": [
+            {"task_id": e.task_id, "capability": e.capability, "objective": e.objective,
+             "format": e.output_spec.format, "artifacts": e.output_spec.artifacts,
+             "constraints": e.constraints}
+            for e in envelopes
+        ],
+    }
+
+
+@app.post("/api/orgs/{org}/groups/{group_id}/approve")
+async def approve_plan(org: str, group_id: str, body: ApproveRequest) -> dict[str, Any]:
+    """批准计划并开始执行；可带 edits 微调步骤目标。"""
+    if not await hub.approve_plan(org, group_id, edits=body.edits):
+        raise HTTPException(404, "该任务群没有待批准的计划")
+    return {"group_id": group_id, "status": "approved"}
+
+
+@app.post("/api/orgs/{org}/groups/{group_id}/reject")
+async def reject_plan(org: str, group_id: str, body: RejectRequest) -> dict[str, Any]:
+    if not await hub.reject_plan(org, group_id, body.reason):
+        raise HTTPException(404, "该任务群没有待批准的计划")
+    return {"group_id": group_id, "status": "rejected"}
+
+
+@app.post("/api/orgs/{org}/tasks/{task_id}/reply")
+async def reply(org: str, task_id: str, body: ReplyRequest) -> dict[str, Any]:
+    """答复被中断的任务——决策卡的提交入口，与待办、任务群三处同源。"""
+    office = await hub.office(org)
+    row = next((t for t in office.store.tasks() if t["task_id"] == task_id), None)
+    if not row:
+        raise HTTPException(404, f"未知任务 {task_id}")
+    if row["state"] != "input_required":
+        raise HTTPException(409, f"任务当前状态为 {row['state']}，无需答复")
+    asyncio.create_task(hub.resume(org, task_id, body.answer))
+    return {"task_id": task_id, "status": "resumed"}
+
+
+# ---- WebSocket ------------------------------------------------------------
+@app.websocket("/ws/{org}")
+async def ws(websocket: WebSocket, org: str, since: int = 0) -> None:
+    """事件流。`?since=<seq>` 断线重连：先补发漏掉的历史事件，再转入实时推送。
+
+    events 表 append-only、seq 单调递增——客户端记住最后收到的 seq 即可无缝续上
+    （等价于 Gateway SSE 的 Last-Event-ID 语义，embedded 路线自行实现）。
+    """
+    await websocket.accept()
+    queue: asyncio.Queue[MiloEvent] = asyncio.Queue()
+    hub.subscribe(org, queue)
+    try:
+        office = await hub.office(org)
+
+        # 1) 补发：先把断线期间的事件按序补上，客户端据此对齐状态
+        replayed = 0
+        if since:
+            for row in office.store.events_since(since):
+                await websocket.send_json(_row_to_frame(row, replay=True))
+                replayed += 1
+        await websocket.send_json({
+            "type": "_sync", "replayed": replayed,
+            "latest_seq": office.store.latest_seq(),
+        })
+
+        # 2) 实时：补发与实时之间可能有重叠事件，客户端按 seq/event_id 去重
+        while True:
+            ev = await queue.get()
+            await websocket.send_json({
+                "seq": ev.seq,          # 落库时回填，客户端据此推进水位
+                "content": ev.content,  # 人类可读文本，UI 直接渲染（与补发帧同源）
+                "event_id": ev.event_id,
+                "group_id": ev.group_id,
+                "task_id": ev.task_id,
+                "type": ev.type.value,
+                "actor": ev.actor,
+                "ts": ev.ts.isoformat(),
+                "reach": ev.effective_reach().value,
+                "payload": ev.payload,
+                "replay": False,
+            })
+    except WebSocketDisconnect:
+        pass
+    finally:
+        hub.unsubscribe(org, queue)
+
+
+def _row_to_frame(row: dict, *, replay: bool) -> dict[str, Any]:
+    """把落库的事件行还原为 WS 帧（补发路径带 seq，供客户端记录水位）。"""
+    return {
+        "seq": row["seq"],
+        "event_id": row["event_id"],
+        "group_id": row["group_id"],
+        "task_id": row["task_id"],
+        "run_id": row["run_id"],
+        "type": row["type"],
+        "category": row["category"],
+        "actor": row["actor"],
+        "ts": row["ts"],
+        "reach": row["reach"],
+        "content": row["content"],
+        "payload": row["metadata"],
+        "replay": replay,
+    }
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    with contextlib.suppress(Exception):
+        await hub.close_all()

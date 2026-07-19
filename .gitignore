@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+node_modules/
+.DS_Store
+.milo/
+spikes/**/run*/
+spikes/**/events.jsonl
+artifacts/
+.env
+
+# 桌面端
+apps/desktop/node_modules/
+apps/desktop/dist/
+apps/desktop/src-tauri/target/

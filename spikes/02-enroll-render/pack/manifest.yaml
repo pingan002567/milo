@@ -1,0 +1,26 @@
+apiVersion: milopack/v1
+name: lit-scout
+version: 0.1.0
+author: "@milo-official"
+license: MIT
+description: 文献检索成员——多库检索 + 引用核对，输出带引用的文献清单。
+deerflow:
+  minVersion: "2.0.0"
+capabilities:
+  - id: literature-search
+    description: 按主题检索近年文献并按方法谱系归类
+    tags: [research, academic]
+    examples: ["检索扩散模型在蛋白质设计的代表工作"]
+  - id: citation-check
+    description: 核对引用完整性与可溯源性
+    tags: [quality]
+model_requirements:
+  min_tier: reasoning
+  context_window: ">=128k"
+permissions:
+  network: []          # 空数组 = 禁外网（本 spike 用最严策略验证升级契约）
+  filesystem: workspace
+  python_repl: false
+eval:
+  suite: evals/
+  min_score: 4.0

@@ -1,0 +1,1870 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Milo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@450;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --desk: #2a2e34;
+  --win: #f2f3f5;
+  --surface: #ffffff;
+  --surface-2: #ebecef;
+  --ink: #0c0e12;
+  --ink-2: #5a6170;
+  --ink-3: #8b929e;
+  --line: rgba(0,0,0,.08);
+  --line-2: rgba(0,0,0,.05);
+  --rail: #14171c;
+  --teal: #0d9488;
+  --teal-soft: rgba(13,148,136,.12);
+  --amber: #d97706;
+  --amber-soft: rgba(217,119,6,.12);
+  --red: #dc2626;
+  --red-soft: rgba(220,38,38,.1);
+  --green: #16a34a;
+  --green-soft: rgba(22,163,74,.12);
+  --blue: #2563eb;
+  --blue-soft: rgba(37,99,235,.1);
+  --sans: "Plus Jakarta Sans", -apple-system, "SF Pro Text", "PingFang SC", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --r: 12px;
+  --r-sm: 8px;
+  --titlebar: 38px;
+  --rail-w: 68px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--desk);
+  background-image:
+    radial-gradient(ellipse 100% 80% at 50% 120%, #1a1d22, transparent),
+    linear-gradient(160deg, #32363e 0%, #22262c 50%, #1c1f24 100%);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+  user-select: text;
+}
+button { cursor: pointer; border: 0; background: none; }
+textarea, input { outline: none; }
+
+/* —— App window —— */
+.desktop {
+  width: min(1180px, 100%);
+  height: min(760px, calc(100vh - 40px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--win);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.06),
+    0 28px 80px rgba(0,0,0,.45),
+    0 8px 24px rgba(0,0,0,.3);
+  animation: winIn .35s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes winIn {
+  from { opacity: 0; transform: scale(.97) translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.titlebar {
+  height: var(--titlebar);
+  background: linear-gradient(180deg, #eceef1, #e4e6ea);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 78px 1fr 78px;
+  align-items: center;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+.traffic {
+  display: flex;
+  gap: 7px;
+  padding-left: 14px;
+  -webkit-app-region: no-drag;
+}
+.traffic i {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  display: block;
+}
+.traffic .c { background: #ff5f57; }
+.traffic .m { background: #febc2e; }
+.traffic .g { background: #28c840; }
+.titlebar .ttl {
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: -.01em;
+}
+.titlebar .ttl b { color: var(--ink); font-weight: 700; }
+.titlebar .acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  padding-right: 10px;
+  -webkit-app-region: no-drag;
+}
+.titlebar .acts button {
+  width: 28px; height: 24px;
+  border-radius: 6px;
+  color: var(--ink-2);
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+}
+.titlebar .acts button:hover { background: rgba(0,0,0,.06); }
+
+.shell {
+  flex: 1;
+  display: grid;
+  grid-template-columns: var(--rail-w) 1fr;
+  min-height: 0;
+}
+
+/* —— Icon rail —— */
+.rail {
+  background: var(--rail);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0 10px;
+  gap: 4px;
+}
+.rail .logo {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #14b8a6, #0f766e);
+  color: #fff;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -.04em;
+  display: grid;
+  place-items: center;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 12px rgba(13,148,136,.35);
+}
+.rail button {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: #7a8494;
+  position: relative;
+  transition: color .12s, background .12s;
+}
+.rail button .ico { font-size: 18px; line-height: 1; }
+.rail button .lbl { font-size: 9.5px; font-weight: 600; letter-spacing: .01em; }
+.rail button:hover { color: #c8d0db; background: rgba(255,255,255,.05); }
+.rail button.on {
+  color: #fff;
+  background: rgba(255,255,255,.1);
+}
+.rail button.on::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px; bottom: 12px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: #2dd4bf;
+}
+.rail .badge {
+  position: absolute;
+  top: 6px; right: 6px;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #ea580c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.rail .grow { flex: 1; }
+.rail .avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: #2a3340;
+  color: #9aa4b2;
+  font-size: 11px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid #3a4554;
+}
+
+/* —— Stage —— */
+.stage {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--win);
+}
+.toolbar {
+  height: 44px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.toolbar h1 {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+.toolbar .seg {
+  display: flex;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 1px;
+}
+.toolbar .seg button {
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--ink-2);
+}
+.toolbar .seg button.on {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0,0,0,.08);
+}
+.org-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 4px 8px 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 220px;
+}
+.org-pill select {
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+  font-size: 12px;
+  max-width: 160px;
+  appearance: none;
+  padding-right: 4px;
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px var(--green-soft);
+  flex-shrink: 0;
+}
+.spacer { flex: 1; }
+.tb-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.tb-btn:hover { background: #e0e2e6; }
+.tb-btn.primary {
+  background: var(--teal);
+  color: #fff;
+}
+.tb-btn.primary:hover { filter: brightness(1.06); }
+
+.view {
+  flex: 1;
+  min-height: 0;
+  display: none;
+  overflow: hidden;
+}
+.view.on { display: flex; }
+
+/* chips / tags */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.chip.mono { font-family: var(--mono); font-weight: 500; font-size: 10.5px; }
+.chip.teal { background: var(--teal-soft); color: #0f766e; }
+.chip.amber { background: var(--amber-soft); color: #b45309; }
+.chip.red { background: var(--red-soft); color: var(--red); }
+.chip.green { background: var(--green-soft); color: #15803d; }
+.chip.blue { background: var(--blue-soft); color: var(--blue); }
+
+.btn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--teal);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: transform .1s, filter .12s;
+}
+.btn:active { transform: scale(.97); }
+.btn.ghost {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.btn.ok { background: var(--green); }
+.btn.warn { background: var(--amber); }
+.btn.danger {
+  background: transparent;
+  color: var(--red);
+  box-shadow: inset 0 0 0 1px rgba(220,38,38,.35);
+}
+.btn.sm { height: 26px; padding: 0 9px; font-size: 11.5px; }
+.btn.block { width: 100%; }
+
+/* ========== DM (私聊 only) ========== */
+#view-command {
+  flex-direction: row;
+}
+.dm-list {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--win);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.dm-list-h {
+  height: 44px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.dm-list-h h1 { font-size: 15px; font-weight: 750; letter-spacing: -.02em; }
+.dm-list-h .org-mini {
+  border: 0;
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  max-width: 120px;
+}
+.dm-search {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-2);
+  flex-shrink: 0;
+}
+.dm-search input {
+  width: 100%;
+  height: 32px;
+  border: 0;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+.dm-sec {
+  padding: 10px 14px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+  letter-spacing: .04em;
+}
+.dm-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 6px 10px;
+}
+.dm-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 10px;
+  text-align: left;
+  transition: background .12s;
+}
+.dm-item:hover { background: rgba(0,0,0,.04); }
+.dm-item.on {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.dm-item.locked {
+  opacity: .45;
+  cursor: default;
+}
+.dm-item.locked:hover { background: transparent; }
+.dm-av {
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  color: #fff;
+  flex-shrink: 0;
+}
+.dm-av.conductor { background: linear-gradient(145deg, #0d9488, #14b8a6); }
+.dm-av.member { background: #64748b; font-size: 12px; }
+.dm-item .nm { font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+.dm-item .preview {
+  font-size: 11.5px;
+  color: var(--ink-2);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+.dm-item .time { font-size: 10.5px; color: var(--ink-3); }
+.dm-item .unread {
+  margin-top: 4px;
+  min-width: 18px; height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #ea580c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+}
+.dm-hint {
+  margin: 8px 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.45;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.cmd-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.dm-head {
+  height: 52px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.dm-head .av {
+  width: 36px; height: 36px;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #0d9488, #14b8a6);
+  color: #fff;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.dm-head .meta { min-width: 0; }
+.dm-head .meta .nm {
+  font-size: 14px;
+  font-weight: 750;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dm-head .meta .sub {
+  font-size: 11.5px;
+  color: var(--ink-2);
+  margin-top: 1px;
+}
+.cmd-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(13,148,136,.04), transparent),
+    var(--surface);
+}
+.cmd-thread::-webkit-scrollbar { width: 6px; }
+.cmd-thread::-webkit-scrollbar-thumb { background: #cfd3da; border-radius: 3px; }
+
+.day-sep {
+  align-self: center;
+  font-size: 11px;
+  color: var(--ink-3);
+  background: var(--surface-2);
+  padding: 3px 10px;
+  border-radius: 10px;
+  margin: 4px 0;
+}
+
+.msg {
+  max-width: min(440px, 88%);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  animation: msgIn .22s ease both;
+}
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.msg.me { align-self: flex-end; align-items: flex-end; }
+.msg.them { align-self: flex-start; }
+.msg.card-msg { max-width: min(380px, 92%); }
+.msg .who {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--ink-3);
+  padding: 0 4px;
+}
+.msg .bubble {
+  padding: 9px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  user-select: text;
+}
+.msg.them .bubble {
+  background: var(--surface-2);
+  border-bottom-left-radius: 5px;
+  color: var(--ink);
+}
+.msg.me .bubble {
+  background: var(--teal);
+  color: #fff;
+  border-bottom-right-radius: 5px;
+}
+.msg .bubble .plan {
+  margin-top: 8px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.msg .plan li {
+  list-style: none;
+  display: flex;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 12px;
+}
+.msg .plan li:last-child { border-bottom: 0; }
+.msg .plan .n {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--teal);
+  font-weight: 600;
+}
+.msg .acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* 请示卡片：嵌在私聊里 */
+.decide-card {
+  border-radius: 14px;
+  padding: 12px 13px;
+  background: linear-gradient(180deg, #fffbeb, #fff);
+  box-shadow: inset 0 0 0 1px rgba(217,119,6,.4);
+  animation: decidePulse .45s ease both;
+}
+@keyframes decidePulse {
+  from { transform: translateY(-4px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.decide-card .q {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 6px 0 6px;
+  line-height: 1.4;
+  user-select: text;
+}
+.decide-card .ctx {
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.45;
+  margin-bottom: 10px;
+  user-select: text;
+}
+.decide-card .acts {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.decide-card .acts .btn { width: 100%; }
+
+/* 轻量进度条：系统消息感，不抢私聊 */
+.sys-note {
+  align-self: center;
+  max-width: 90%;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  padding: 6px 12px;
+  border-radius: 8px;
+  text-align: center;
+  line-height: 1.4;
+}
+.sys-note b { color: var(--ink); font-weight: 650; }
+
+.composer {
+  padding: 10px 14px calc(12px + var(--safe-b));
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.composer .box {
+  flex: 1;
+  background: var(--surface-2);
+  border-radius: 18px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: flex-end;
+  min-height: 40px;
+}
+.composer textarea {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  resize: none;
+  height: 22px;
+  max-height: 96px;
+  line-height: 22px;
+  font-size: 13.5px;
+}
+.composer .send {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--teal);
+  color: #fff;
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.sec-lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin: 12px 4px 6px;
+}
+
+/* ========== MARKET (App Store list) ========== */
+#view-market { flex-direction: column; }
+.mkt-search {
+  padding: 10px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.mkt-search .field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0 12px;
+  height: 34px;
+}
+.mkt-search .field span { color: var(--ink-3); font-size: 14px; }
+.mkt-search input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+}
+.mkt-filters {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  background: var(--win);
+}
+.mkt-filters button {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface);
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  white-space: nowrap;
+}
+.mkt-filters button.on {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: none;
+}
+.pack-list {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--surface);
+}
+.pack-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--line-2);
+  transition: background .1s;
+}
+.pack-row:hover { background: #f7f8fa; }
+.pack-row:active { background: var(--surface-2); }
+.pack-icon {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+  letter-spacing: -.03em;
+}
+.pack-row .name { font-size: 13.5px; font-weight: 700; letter-spacing: -.02em; }
+.pack-row .sub { font-size: 11.5px; color: var(--ink-2); margin-top: 2px; line-height: 1.35; }
+.pack-row .meta { font-size: 11px; color: var(--ink-3); margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pack-row .get {
+  height: 28px;
+  min-width: 64px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: var(--teal-soft);
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 700;
+}
+.pack-row .get:hover { background: rgba(13,148,136,.22); }
+.pack-row .score {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--teal);
+  text-align: right;
+  margin-bottom: 6px;
+}
+
+/* ========== ORG ========== */
+#view-org { flex-direction: column; }
+.org-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.org-pane { display: none; flex: 1; min-height: 0; overflow: auto; }
+.org-pane.on { display: flex; flex-direction: column; }
+
+.org-chart {
+  flex: 1;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(13,148,136,.06), transparent 50%),
+    var(--win);
+}
+.node {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 10px 14px;
+  min-width: 132px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06), inset 0 0 0 1px var(--line);
+}
+.node.conductor {
+  min-width: 168px;
+  background: linear-gradient(180deg, #ecfdf9, #fff);
+  box-shadow: 0 1px 3px rgba(0,0,0,.06), inset 0 0 0 1.5px rgba(13,148,136,.4);
+}
+.node.dept {
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 1.5px dashed #94a3b8;
+}
+.node .role { font-size: 9.5px; font-weight: 700; color: var(--ink-3); letter-spacing: .05em; text-transform: uppercase; }
+.node .nm { font-weight: 700; font-size: 13px; margin: 2px 0 6px; }
+.node .st { display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; }
+.v-line { width: 2px; height: 22px; background: #c8ced6; }
+.h-row { display: flex; gap: 14px; position: relative; }
+.h-row::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 12%; right: 12%;
+  height: 2px;
+  background: #c8ced6;
+}
+.branch { display: flex; flex-direction: column; align-items: center; position: relative; }
+.branch::before {
+  content: "";
+  position: absolute;
+  top: -12px; left: 50%;
+  width: 2px; height: 12px;
+  background: #c8ced6;
+}
+.org-hint {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-3);
+  padding: 12px 20px 20px;
+  max-width: 400px;
+  margin: 0 auto;
+  line-height: 1.45;
+}
+
+.form-scroll { padding: 12px 14px 24px; }
+.form-card {
+  background: var(--surface);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+.form-card .fh {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--line-2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.frow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-2);
+}
+.frow:last-child { border-bottom: 0; }
+.frow label { font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.frow input, .frow select, .frow textarea {
+  border: 0;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  width: 100%;
+}
+.frow textarea { font-family: var(--mono); font-size: 11.5px; min-height: 72px; resize: vertical; }
+.lint {
+  margin: 0 14px 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 550;
+}
+.lint.ok { background: var(--green-soft); color: #15803d; }
+.lint.warn { background: var(--amber-soft); color: #b45309; }
+
+.yaml-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.yaml-ed {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  padding: 14px 16px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  background: #0f1217;
+  color: #c8cdd5;
+  resize: none;
+  tab-size: 2;
+}
+
+/* ========== WIZARD ========== */
+#view-wizard { flex-direction: column; background: var(--surface); }
+.wiz-progress {
+  display: flex;
+  padding: 14px 18px 0;
+  gap: 0;
+  flex-shrink: 0;
+}
+.wiz-progress .s {
+  flex: 1;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--ink-3);
+  position: relative;
+  padding-bottom: 10px;
+}
+.wiz-progress .s::after {
+  content: "";
+  position: absolute;
+  left: 10%; right: 10%;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+.wiz-progress .s.on { color: var(--teal); }
+.wiz-progress .s.on::after { background: var(--teal); }
+.wiz-progress .s.done { color: var(--green); }
+.wiz-progress .s.done::after { background: var(--green); }
+.wiz-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+}
+.wiz-step { display: none; }
+.wiz-step.on { display: block; animation: msgIn .2s ease; }
+.wiz-foot {
+  padding: 12px 18px calc(14px + var(--safe-b));
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ========== TRACE ========== */
+#view-trace { flex-direction: column; overflow: auto; background: var(--win); }
+.trace-card {
+  margin: 12px 14px;
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+.trace-card .th {
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--line-2);
+  font-weight: 700;
+  font-size: 13px;
+}
+.trace-rail {
+  display: flex;
+  overflow-x: auto;
+  padding: 12px;
+  gap: 0;
+  -webkit-overflow-scrolling: touch;
+}
+.tstep {
+  min-width: 88px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-right: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+}
+.tstep:first-child { border-radius: 8px 0 0 8px; }
+.tstep:last-child { border-radius: 0 8px 8px 0; border-right: 0; }
+.tstep .ts { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); font-weight: 500; margin-bottom: 2px; }
+.tstep.done { background: var(--green-soft); color: #15803d; }
+.tstep.cur { background: var(--teal-soft); color: #0f766e; }
+.envelope {
+  margin: 0 12px 12px;
+  padding: 12px;
+  background: #0f1217;
+  color: #c8cdd5;
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow: auto;
+  user-select: text;
+}
+
+/* ========== Sheet (app modal) ========== */
+.sheet-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.4);
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  padding: 0;
+}
+.sheet-bg.show { display: flex; animation: fade .18s ease; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.sheet {
+  width: min(440px, 100%);
+  max-height: 88%;
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: sheetUp .28s cubic-bezier(.2,.8,.2,1);
+  box-shadow: 0 -8px 40px rgba(0,0,0,.2);
+}
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+.sheet .grab {
+  width: 36px; height: 4px;
+  background: #d1d5db;
+  border-radius: 2px;
+  margin: 8px auto 0;
+  flex-shrink: 0;
+}
+.sheet .sh {
+  padding: 12px 16px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sheet .sh h2 { font-size: 17px; font-weight: 750; letter-spacing: -.02em; }
+.sheet .sh .close {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.sheet .sb {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+.sheet .sf {
+  padding: 12px 16px calc(16px + var(--safe-b));
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.rubric .bar-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 32px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+}
+.rubric .track {
+  height: 5px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.rubric .fill {
+  height: 100%;
+  background: var(--teal);
+  border-radius: 3px;
+}
+
+.toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(60px);
+  background: rgba(15,18,23,.92);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 20px;
+  font-size: 12.5px;
+  font-weight: 550;
+  z-index: 200;
+  opacity: 0;
+  transition: .25s cubic-bezier(.2,.8,.2,1);
+  max-width: 90%;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.mt6 { margin-top: 6px; }
+.mt8 { margin-top: 8px; }
+.mt12 { margin-top: 12px; }
+.hidden { display: none !important; }
+.muted { color: var(--ink-2); }
+.mono { font-family: var(--mono); }
+
+/* —— Responsive: phone app —— */
+@media (max-width: 820px) {
+  body { padding: 0; background: var(--win); }
+  .desktop {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .titlebar { display: none; }
+  .shell { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .rail {
+    order: 2;
+    flex-direction: row;
+    height: calc(56px + var(--safe-b));
+    padding: 4px 8px calc(4px + var(--safe-b));
+    justify-content: space-around;
+    border-top: 1px solid #1e242c;
+  }
+  .rail .logo, .rail .grow, .rail .avatar { display: none; }
+  .rail button {
+    width: 56px; height: 48px;
+  }
+  .rail button.on::before {
+    left: 16px; right: 16px; top: auto; bottom: 2px;
+    width: auto; height: 3px;
+    border-radius: 2px 2px 0 0;
+  }
+  #view-command { position: relative; }
+  .dm-list {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    z-index: 20;
+    border: 0;
+  }
+  .dm-list.chat-open { display: none; }
+  .cmd-main { display: none; }
+  .cmd-main.chat-open { display: flex; }
+  .dm-back { display: inline-flex !important; }
+}
+@media (min-width: 821px) {
+  .dm-back { display: none !important; }
+  /* 桌面：列表 + 私聊并排，始终打开 Conductor */
+  .cmd-main { display: flex; }
+}
+</style>
+</head>
+<body>
+<div class="desktop">
+  <div class="titlebar">
+    <div class="traffic"><i class="c"></i><i class="m"></i><i class="g"></i></div>
+    <div class="ttl"><b>Milo</b> — due-diligence-inc</div>
+    <div class="acts">
+      <button title="搜索" onclick="toast('⌘K 命令面板（原型）')">⌕</button>
+      <button title="通知">◌</button>
+    </div>
+  </div>
+
+  <div class="shell">
+    <nav class="rail">
+      <div class="logo">M</div>
+      <button class="on" data-view="command" title="私聊">
+        <span class="ico">◎</span><span class="lbl">私聊</span>
+        <span class="badge" id="navBadge">2</span>
+      </button>
+      <button data-view="market" title="市场">
+        <span class="ico">▦</span><span class="lbl">市场</span>
+      </button>
+      <button data-view="org" title="组织">
+        <span class="ico">⬡</span><span class="lbl">组织</span>
+      </button>
+      <button data-view="wizard" title="生成">
+        <span class="ico">✦</span><span class="lbl">生成</span>
+      </button>
+      <button data-view="trace" title="Trace">
+        <span class="ico">▤</span><span class="lbl">Trace</span>
+      </button>
+      <div class="grow"></div>
+      <div class="avatar">WZ</div>
+    </nav>
+
+    <div class="stage">
+      <!-- 私聊 -->
+      <div class="view on" id="view-command">
+        <aside class="dm-list" id="dmList">
+          <div class="dm-list-h">
+            <h1>私聊</h1>
+            <select class="org-mini" id="orgSelect" onchange="syncTitle()">
+              <option>due-diligence-inc</option>
+              <option>content-studio</option>
+              <option>oss-maintainers</option>
+            </select>
+          </div>
+          <div class="dm-search">
+            <input type="search" placeholder="搜索会话" disabled title="原型：仅 Conductor">
+          </div>
+          <div class="dm-sec">可对话</div>
+          <div class="dm-scroll">
+            <button class="dm-item on" id="dmConductor" onclick="openDm()">
+              <div class="dm-av conductor">C</div>
+              <div>
+                <div class="nm">Conductor</div>
+                <div class="preview" id="dmPreview">需要你决定：对赌补偿方式…</div>
+              </div>
+              <div style="text-align:right">
+                <div class="time">刚刚</div>
+                <div class="unread" id="dmUnread">2</div>
+              </div>
+            </button>
+
+            <div class="dm-sec" style="margin-top:12px">下属（不可私聊）</div>
+            <button class="dm-item locked" type="button" onclick="toast('成员不支持私聊 · 请示经 Conductor')">
+              <div class="dm-av member">法</div>
+              <div>
+                <div class="nm">legal</div>
+                <div class="preview">部门 · 经 Conductor 汇报</div>
+              </div>
+            </button>
+            <button class="dm-item locked" type="button" onclick="toast('成员不支持私聊 · 请示经 Conductor')">
+              <div class="dm-av member">研</div>
+              <div>
+                <div class="nm">research</div>
+                <div class="preview">成员 · 经 Conductor 汇报</div>
+              </div>
+            </button>
+            <button class="dm-item locked" type="button" onclick="toast('成员不支持私聊 · 请示经 Conductor')">
+              <div class="dm-av member">财</div>
+              <div>
+                <div class="nm">financial-analyst</div>
+                <div class="preview">成员 · 经 Conductor 汇报</div>
+              </div>
+            </button>
+            <div class="dm-hint">办公软件里的「私聊下属」在此关闭。你只和 Conductor 私聊；下属状态可在组织里巡视。</div>
+          </div>
+        </aside>
+
+        <div class="cmd-main" id="dmChat">
+          <div class="dm-head">
+            <button class="tb-btn dm-back" onclick="closeDmMobile()">←</button>
+            <div class="av">C</div>
+            <div class="meta">
+              <div class="nm">Conductor <span class="status-dot"></span></div>
+              <div class="sub">唯一直属 · 请示与进度都在这条私聊里</div>
+            </div>
+            <div class="spacer"></div>
+            <button class="tb-btn" onclick="go('trace')">Trace</button>
+          </div>
+          <div class="cmd-thread" id="chatMsgs">
+            <div class="day-sep">今天</div>
+            <div class="msg them">
+              <div class="who">Conductor</div>
+              <div class="bubble">编制 <span class="mono">due-diligence-inc@1.3.0</span> 已就绪。我是你的唯一直属；成员不会单独找你私聊。</div>
+            </div>
+            <div class="msg me">
+              <div class="who">你</div>
+              <div class="bubble">对 Acme 做完整尽调，重点看股权转让协议里的对赌。</div>
+            </div>
+            <div class="msg them">
+              <div class="who">Conductor</div>
+              <div class="bubble">
+                已拆计划，批准即开工：
+                <ol class="plan">
+                  <li><span class="n">1</span><div><b>collect</b> → research</div></li>
+                  <li><span class="n">2</span><div><b>legal-review</b> → legal</div></li>
+                  <li><span class="n">3</span><div><b>synthesize</b> → financial-analyst</div></li>
+                </ol>
+                <div class="acts">
+                  <button class="btn sm ok" onclick="toast('计划已批准')">批准计划</button>
+                  <button class="btn sm ghost" onclick="toast('编辑计划')">调整</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="sys-note"><b>collect</b> 完成 · research · 置信 0.91 · <a href="#" onclick="go('trace');return false" style="color:var(--teal);font-weight:650;text-decoration:none">看 Trace</a></div>
+            <div class="sys-note"><b>legal-review</b> 交付 · risk medium · 有一条请示如下</div>
+
+            <div class="msg them card-msg" data-decide="d1">
+              <div class="who">Conductor · 请示</div>
+              <div class="decide-card">
+                <div class="row">
+                  <span class="chip amber">需要你决定</span>
+                  <span class="chip mono">t-8f3a</span>
+                </div>
+                <div class="q">对赌补偿是否接受「股份回购」？</div>
+                <div class="ctx">法务 confidence 0.48；包权限禁止其自行选择具外部效力的条款解读。</div>
+                <div class="acts">
+                  <button class="btn sm ok" onclick="resolveDecide(this,'已批准股份回购')">批准股份回购</button>
+                  <button class="btn sm ghost" onclick="resolveDecide(this,'已选现金补偿')">改用现金补偿</button>
+                  <button class="btn sm danger" onclick="resolveDecide(this,'已驳回')">驳回重审</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="msg them card-msg" data-decide="d2">
+              <div class="who">Conductor · 请示</div>
+              <div class="decide-card">
+                <div class="row"><span class="chip amber">需要你决定</span><span class="chip">里程碑门禁</span></div>
+                <div class="q">是否授权执行 synthesize？</div>
+                <div class="ctx">collect 与 legal-review 均已 Succeeded。</div>
+                <div class="acts">
+                  <button class="btn sm ok" onclick="resolveDecide(this,'已授权 synthesize')">授权执行</button>
+                  <button class="btn sm ghost" onclick="toast('编辑计划')">先改计划</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="box">
+              <textarea id="chatInput" rows="1" placeholder="私聊 Conductor…" oninput="autoGrow(this)"></textarea>
+            </div>
+            <button class="send" onclick="sendChat()" title="发送">↑</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MARKET -->
+      <div class="view" id="view-market">
+        <div class="toolbar">
+          <h1>市场</h1>
+          <span class="chip">带质检报告</span>
+          <div class="spacer"></div>
+          <button class="tb-btn" onclick="go('wizard')">生成</button>
+          <button class="tb-btn" onclick="toast('milo import llm-space')">导入</button>
+        </div>
+        <div class="mkt-search">
+          <div class="field">
+            <span>⌕</span>
+            <input type="search" id="packSearch" placeholder="搜索包 / capability" oninput="filterPacks()">
+          </div>
+        </div>
+        <div class="mkt-filters" id="mktFilters">
+          <button class="on" data-filter="all" onclick="setFilter(this)">全部</button>
+          <button data-filter="legal" onclick="setFilter(this)">法务</button>
+          <button data-filter="finance" onclick="setFilter(this)">财务</button>
+          <button data-filter="research" onclick="setFilter(this)">调研</button>
+          <button data-filter="team" onclick="setFilter(this)">组织模板</button>
+        </div>
+        <div class="pack-list" id="packList"></div>
+      </div>
+
+      <!-- ORG -->
+      <div class="view" id="view-org">
+        <div class="toolbar">
+          <h1>组织</h1>
+          <div class="seg" id="orgSeg">
+            <button class="on" data-tab="chart" onclick="orgTab(this)">图</button>
+            <button data-tab="form" onclick="orgTab(this)">表单</button>
+            <button data-tab="file" onclick="orgTab(this)">YAML</button>
+          </div>
+          <div class="spacer"></div>
+          <button class="tb-btn primary" onclick="go('market')">招募</button>
+        </div>
+        <div class="org-body">
+          <div class="org-pane on" id="org-chart">
+            <div class="org-chart">
+              <div class="node conductor">
+                <div class="role">Conductor</div>
+                <div class="nm">前台 · 调和 · 调度</div>
+                <div class="st"><span class="chip teal">运行时</span><span class="chip amber">打扰 2</span></div>
+              </div>
+              <div class="v-line"></div>
+              <div class="h-row">
+                <div class="branch">
+                  <div class="node dept">
+                    <div class="role">Department</div>
+                    <div class="nm">legal</div>
+                    <div class="st"><span class="chip blue">working</span></div>
+                  </div>
+                  <div class="v-line"></div>
+                  <div class="h-row" style="gap:10px">
+                    <div class="branch"><div class="node"><div class="role">Member</div><div class="nm">初审</div><div class="st"><span class="chip green">Ready</span></div></div></div>
+                    <div class="branch"><div class="node"><div class="role">Member</div><div class="nm">复核</div><div class="st"><span class="chip green">Ready</span></div></div></div>
+                  </div>
+                </div>
+                <div class="branch">
+                  <div class="node"><div class="role">DeerFlow</div><div class="nm">research</div><div class="st"><span class="chip green">idle</span></div></div>
+                </div>
+                <div class="branch">
+                  <div class="node"><div class="role">Member</div><div class="nm">financial</div><div class="st"><span class="chip amber">queued</span></div></div>
+                </div>
+                <div class="branch">
+                  <div class="node" style="opacity:.6"><div class="role">试用期</div><div class="nm">news-scanner</div><div class="st"><span class="chip">Eval</span></div></div>
+                </div>
+              </div>
+            </div>
+            <p class="org-hint">只读图 · 不拖线。部门对上是虚拟成员，内部过程隐藏。</p>
+          </div>
+
+          <div class="org-pane" id="org-form">
+            <div class="form-scroll">
+              <div class="lint ok">✓ lint：有 default · 无环 · 深度 1 · 扇出 4</div>
+              <div class="lint warn">⚠ financial-analyst 本地路径，发布前需 pin</div>
+              <div class="form-card">
+                <div class="fh">成员绑定</div>
+                <div class="frow">
+                  <label>market-researcher</label>
+                  <input class="mono" value="registry.milo.dev/market-researcher@sha256:ab12…" readonly>
+                </div>
+                <div class="frow">
+                  <label>model · sandbox</label>
+                  <div class="row">
+                    <select style="flex:1"><option>reasoning → deepseek-r1</option></select>
+                    <select style="flex:1"><option>aio</option><option>k8s</option><option>embedded</option></select>
+                  </div>
+                </div>
+                <div class="frow">
+                  <label>legal（部门 pin）</label>
+                  <input class="mono" value="registry.milo.dev/teams/legal-review@1.2.0" readonly>
+                </div>
+              </div>
+              <div class="form-card">
+                <div class="fh"><span>路由 · CEL</span><span class="chip">确定性</span></div>
+                <div class="frow">
+                  <label>rules</label>
+                  <textarea>task.capability in ["contract-review","legal-risk"] → legal
+task.tags.exists(t, t=="finance") → financial-analyst
+default: ask_user</textarea>
+                </div>
+                <div class="frow">
+                  <label>escalation</label>
+                  <textarea>report.confidence < 0.6 → escalate
+network_external → block
+tokens > 80% → warn</textarea>
+                </div>
+                <div class="frow">
+                  <label>maxParallel ≤ 5</label>
+                  <input type="number" value="5" min="1" max="5" style="width:80px">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="org-pane" id="org-file">
+            <div class="yaml-pane">
+              <textarea class="yaml-ed" id="yamlEd" spellcheck="false">apiVersion: milo.dev/v1alpha1
+kind: Organization
+metadata:
+  name: due-diligence-inc
+  version: 1.3.0
+spec:
+  members:
+    - name: market-researcher
+      pack: registry.milo.dev/market-researcher@sha256:ab12…
+      runtime:
+        mode: container
+        sandbox: aio
+    - name: financial-analyst
+      pack: ./packs/financial-analyst
+  departments:
+    - name: legal
+      uses: registry.milo.dev/teams/legal-review@1.2.0
+  routing:
+    rules:
+      - match: 'task.capability in ["contract-review", "legal-risk"]'
+        assign: legal
+    default: ask_user
+  limits:
+    maxParallelMembers: 5
+    maxDepartmentDepth: 2
+status:
+  observedGeneration: 3</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WIZARD -->
+      <div class="view" id="view-wizard">
+        <div class="toolbar"><h1>生成 MiloPack</h1><span class="chip">与市场包同构</span></div>
+        <div class="wiz-progress" id="wizSteps">
+          <div class="s on" data-s="1">角色</div>
+          <div class="s" data-s="2">权限</div>
+          <div class="s" data-s="3">评测</div>
+          <div class="s" data-s="4">发布</div>
+        </div>
+        <div class="wiz-body">
+          <div class="wiz-step on" data-step="1">
+            <div class="frow"><label>包名</label><input id="wName" class="mono" value="pr-triage-assistant"></div>
+            <div class="frow mt12"><label>角色</label><input value="开源仓库 Issue/PR 分诊"></div>
+            <div class="frow mt12"><label>示例任务</label><textarea>涌入 40 个 issue，按 bug/feature/docs 分类并标 P0–P2。</textarea></div>
+          </div>
+          <div class="wiz-step" data-step="2">
+            <div class="frow"><label>capabilities</label><input class="mono" value="issue-triage, pr-review"></div>
+            <div class="frow mt12"><label>permissions（越收敛越少打扰）</label>
+              <label class="row mt6"><input type="checkbox" checked> filesystem: readonly</label>
+              <label class="row mt6"><input type="checkbox"> network: github.com</label>
+              <label class="row mt6"><input type="checkbox"> python_repl</label>
+            </div>
+          </div>
+          <div class="wiz-step" data-step="3">
+            <p class="muted" style="font-size:12.5px;margin-bottom:12px;line-height:1.5">自动生成 3 个评测 case。可去 llm-space 精调后 import。</p>
+            <div class="form-card">
+              <div class="frow"><span class="chip mono">case-01</span> 混淆标题</div>
+              <div class="frow"><span class="chip mono">case-02</span> 安全 issue → P0</div>
+              <div class="frow"><span class="chip mono">case-03</span> docs typo → P2</div>
+            </div>
+          </div>
+          <div class="wiz-step" data-step="4">
+            <pre class="envelope" style="margin:0">my-pack.milopack/
+├── manifest.yaml
+├── persona/system.md
+├── skills/issue-triage/SKILL.md
+├── evals/case-0{1,2,3}.thread.json
+└── assets/</pre>
+          </div>
+        </div>
+        <div class="wiz-foot">
+          <button class="btn ghost" id="wizBack" onclick="wizDelta(-1)" disabled>返回</button>
+          <button class="btn" id="wizNext" onclick="wizDelta(1)">继续</button>
+        </div>
+      </div>
+
+      <!-- TRACE -->
+      <div class="view" id="view-trace">
+        <div class="toolbar">
+          <h1>Trace</h1>
+          <span class="chip mono">ctx-a1</span>
+          <div class="spacer"></div>
+          <button class="tb-btn" onclick="go('command')">回指挥台</button>
+        </div>
+        <div class="trace-card">
+          <div class="th">
+            <span>full-dd-report</span>
+            <span class="chip blue">working</span>
+          </div>
+          <div class="trace-rail">
+            <div class="tstep done"><div class="ts">queued</div>接收</div>
+            <div class="tstep done"><div class="ts">plan</div>分解</div>
+            <div class="tstep done"><div class="ts">CEL</div>路由</div>
+            <div class="tstep done"><div class="ts">assign</div>派单</div>
+            <div class="tstep done"><div class="ts">deliver</div>产物</div>
+            <div class="tstep done"><div class="ts">escalate</div>待决</div>
+            <div class="tstep cur"><div class="ts">gate</div>授权</div>
+            <div class="tstep"><div class="ts">next</div>合成</div>
+          </div>
+          <div class="envelope">{
+  "task_id": "t-8f3a",
+  "capability": "contract-review",
+  "objective": "审查对赌条款风险",
+  "budget": { "tokens": 500000 },
+  "constraints": ["不得访问外部网络"]
+}</div>
+        </div>
+        <p class="org-hint">成员级汇报留在 Milo；实例内 subagent trace 外链 DeerFlow / Langfuse。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pack sheet -->
+<div class="sheet-bg" id="packSheet" onclick="if(event.target===this)closePack()">
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sh">
+      <div>
+        <h2 id="mTitle">pack</h2>
+        <div class="muted mt6" id="mMeta" style="font-size:12px"></div>
+      </div>
+      <button class="close" onclick="closePack()">✕</button>
+    </div>
+    <div class="sb">
+      <div class="row mt6">
+        <span class="chip teal" id="mScore">4.6</span>
+        <span class="chip green">SkillScan</span>
+        <span class="chip" id="mPerm"></span>
+      </div>
+      <p class="muted mt12" id="mDesc" style="font-size:13px;line-height:1.45;user-select:text"></p>
+      <div class="row mt12" id="mCaps"></div>
+      <div class="sec-lbl">质检 rubric</div>
+      <div class="rubric" id="mRubric"></div>
+    </div>
+    <div class="sf">
+      <button class="btn ghost" style="flex:1" onclick="toast('已复制 pin')">复制 pin</button>
+      <button class="btn" style="flex:1" onclick="toast('已招募进组织');closePack()">招募</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ICONS = {
+  legal: { bg: 'linear-gradient(145deg,#0f766e,#14b8a6)', letter: 'L' },
+  finance: { bg: 'linear-gradient(145deg,#1d4ed8,#3b82f6)', letter: 'F' },
+  research: { bg: 'linear-gradient(145deg,#b45309,#f59e0b)', letter: 'R' },
+  team: { bg: 'linear-gradient(145deg,#4c1d95,#7c3aed)', letter: 'T' },
+};
+
+const PACKS = [
+  { id:'legal', cat:'legal', name:'legal-contract-reviewer', author:'@zhangsan', ver:'1.4.0', score:4.6, desc:'合同与对赌条款审查，输出风险等级与条款引用。', caps:['contract-review','legal-risk-analysis'], downloads:'2.1k', perm:'fs: readonly', rubrics:[['条款引用',4.8],['风险分级',4.5],['幻觉控制',4.4]] },
+  { id:'fin', cat:'finance', name:'financial-analyst', author:'@milo-official', ver:'1.2.1', score:4.4, desc:'财报解读与尽调合成，产物走 artifact。', caps:['financial-analysis','dd-synthesize'], downloads:'3.8k', perm:'network: limited', rubrics:[['数字一致',4.6],['可追溯',4.3],['摘要',4.2]] },
+  { id:'res', cat:'research', name:'market-researcher', author:'@deerflow', ver:'2.0.3', score:4.7, desc:'公开信息与新闻收集，skills 原样透传。', caps:['market-research','news-scan'], downloads:'5.4k', perm:'network: *', rubrics:[['覆盖面',4.8],['去噪',4.5],['时效',4.7]] },
+  { id:'team', cat:'team', name:'teams/legal-review', author:'@milo-official', ver:'1.2.0', score:4.5, desc:'成建制法务部：初审+复核，对外单一接口。', caps:['contract-review','department'], downloads:'890', perm:'强制 pin', rubrics:[['接口稳定',4.6],['失败隔离',4.4]] },
+  { id:'triage', cat:'research', name:'pr-triage-assistant', author:'@community', ver:'0.9.2', score:4.1, desc:'开源 Issue/PR 分诊。接近上架线 4.2。', caps:['issue-triage','pr-review'], downloads:'320', perm:'fs: readonly', rubrics:[['分类',4.2],['优先级',4.0]] },
+  { id:'studio', cat:'team', name:'org/content-studio', author:'@milo-official', ver:'1.0.0', score:4.3, desc:'自媒体工作室模板：选题·撰稿·分发。', caps:['content','org-template'], downloads:'1.1k', perm:'凭据重绑', rubrics:[['可跑通',4.4],['能力覆盖',4.2]] },
+];
+
+let packFilter = 'all';
+let decideLeft = 2;
+let wizStep = 1;
+
+function go(view) {
+  document.querySelectorAll('.rail button[data-view]').forEach(b => {
+    b.classList.toggle('on', b.dataset.view === view);
+  });
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+  document.getElementById('view-' + view).classList.add('on');
+  if (view === 'command') openDm();
+}
+
+document.querySelectorAll('.rail button[data-view]').forEach(b => {
+  b.addEventListener('click', () => go(b.dataset.view));
+});
+
+function syncTitle() {
+  const org = document.getElementById('orgSelect').value;
+  document.querySelector('.titlebar .ttl').innerHTML = '<b>Milo</b> — ' + org;
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function openDm() {
+  document.getElementById('dmList').classList.add('chat-open');
+  document.getElementById('dmChat').classList.add('chat-open');
+  document.getElementById('dmConductor').classList.add('on');
+}
+
+function closeDmMobile() {
+  document.getElementById('dmList').classList.remove('chat-open');
+  document.getElementById('dmChat').classList.remove('chat-open');
+}
+
+function updateUnread() {
+  const badge = document.getElementById('navBadge');
+  const unread = document.getElementById('dmUnread');
+  badge.textContent = decideLeft;
+  if (unread) {
+    unread.textContent = decideLeft;
+    unread.classList.toggle('hidden', !decideLeft);
+  }
+  if (!decideLeft) badge.classList.add('hidden');
+  const preview = document.getElementById('dmPreview');
+  if (preview) {
+    preview.textContent = decideLeft
+      ? '需要你决定：还有 ' + decideLeft + ' 条请示'
+      : '暂无待批请示';
+  }
+}
+
+function resolveDecide(btn, msg) {
+  const wrap = btn.closest('.msg');
+  const card = btn.closest('.decide-card');
+  card.style.opacity = '.45';
+  card.style.pointerEvents = 'none';
+  card.querySelector('.acts').innerHTML = '<span class="chip green">已回复</span>';
+  decideLeft = Math.max(0, decideLeft - 1);
+  updateUnread();
+  toast(msg);
+  appendBot(msg + '。已记下，继续调度。');
+  if (wrap) wrap.dataset.done = '1';
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function appendBot(html) {
+  const msgs = document.getElementById('chatMsgs');
+  const el = document.createElement('div');
+  el.className = 'msg them';
+  el.innerHTML = '<div class="who">Conductor</div><div class="bubble">' + html + '</div>';
+  msgs.appendChild(el);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const msgs = document.getElementById('chatMsgs');
+  const el = document.createElement('div');
+  el.className = 'msg me';
+  el.innerHTML = '<div class="who">你</div><div class="bubble">' + escapeHtml(text) + '</div>';
+  msgs.appendChild(el);
+  input.value = '';
+  autoGrow(input);
+  msgs.scrollTop = msgs.scrollHeight;
+  setTimeout(() => appendBot('已拆成任务信封，CEL 匹配成员中…'), 400);
+}
+
+function autoGrow(el) {
+  el.style.height = '22px';
+  el.style.height = Math.min(el.scrollHeight, 96) + 'px';
+}
+
+document.getElementById('chatInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+
+function renderPacks() {
+  const q = (document.getElementById('packSearch').value || '').toLowerCase();
+  const list = document.getElementById('packList');
+  list.innerHTML = '';
+  PACKS.filter(p => {
+    if (packFilter !== 'all' && p.cat !== packFilter) return false;
+    if (!q) return true;
+    return (p.name + p.author + p.caps.join(' ') + p.desc).toLowerCase().includes(q);
+  }).forEach(p => {
+    const ic = ICONS[p.cat] || ICONS.research;
+    const row = document.createElement('button');
+    row.className = 'pack-row';
+    row.onclick = () => openPack(p);
+    row.innerHTML = `
+      <div class="pack-icon" style="background:${ic.bg}">${ic.letter}</div>
+      <div>
+        <div class="name">${p.name}</div>
+        <div class="sub">${p.desc}</div>
+        <div class="meta">
+          <span>${p.author}</span>
+          <span>·</span>
+          <span class="mono">${p.score.toFixed(1)}</span>
+          <span>·</span>
+          <span>${p.downloads}</span>
+        </div>
+      </div>
+      <div>
+        <div class="score">${p.score.toFixed(1)}</div>
+        <button class="get" onclick="event.stopPropagation();toast('已招募 ${p.name}')">获取</button>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+function setFilter(el) {
+  packFilter = el.dataset.filter;
+  document.querySelectorAll('#mktFilters button').forEach(b => b.classList.toggle('on', b === el));
+  renderPacks();
+}
+function filterPacks() { renderPacks(); }
+
+function openPack(p) {
+  document.getElementById('mTitle').textContent = p.name;
+  document.getElementById('mMeta').textContent = `${p.author} · v${p.ver}`;
+  document.getElementById('mScore').textContent = '复跑 ' + p.score.toFixed(1);
+  document.getElementById('mPerm').textContent = p.perm;
+  document.getElementById('mDesc').textContent = p.desc;
+  document.getElementById('mCaps').innerHTML = p.caps.map(c => '<span class="chip mono">' + c + '</span>').join('');
+  document.getElementById('mRubric').innerHTML = p.rubrics.map(([k, v]) =>
+    `<div class="bar-row"><span>${k}</span><div class="track"><div class="fill" style="width:${(v/5)*100}%"></div></div><span class="mono">${v.toFixed(1)}</span></div>`
+  ).join('');
+  document.getElementById('packSheet').classList.add('show');
+}
+function closePack() {
+  document.getElementById('packSheet').classList.remove('show');
+}
+
+function orgTab(el) {
+  document.querySelectorAll('#orgSeg button').forEach(b => b.classList.toggle('on', b === el));
+  ['chart', 'form', 'file'].forEach(t => {
+    document.getElementById('org-' + t).classList.toggle('on', el.dataset.tab === t);
+  });
+}
+
+function wizDelta(d) {
+  wizStep = Math.min(4, Math.max(1, wizStep + d));
+  document.querySelectorAll('.wiz-step').forEach(s => {
+    s.classList.toggle('on', Number(s.dataset.step) === wizStep);
+  });
+  document.querySelectorAll('#wizSteps .s').forEach(s => {
+    const n = Number(s.dataset.s);
+    s.classList.toggle('on', n === wizStep);
+    s.classList.toggle('done', n < wizStep);
+  });
+  document.getElementById('wizBack').disabled = wizStep === 1;
+  const next = document.getElementById('wizNext');
+  if (wizStep === 4) {
+    next.textContent = '发布';
+    next.onclick = () => toast('已发布（原型）');
+  } else {
+    next.textContent = '继续';
+    next.onclick = () => wizDelta(1);
+  }
+}
+
+renderPacks();
+</script>
+</body>
+</html>

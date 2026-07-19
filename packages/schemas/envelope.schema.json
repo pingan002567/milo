@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milo.dev/schemas/envelope/v1",
+  "title": "任务信封（结构化委派四要素为必填）",
+  "type": "object",
+  "required": ["task_id", "capability", "objective", "output_spec", "budget"],
+  "additionalProperties": false,
+  "properties": {
+    "task_id": { "type": "string" },
+    "parent_task": { "type": "string" },
+    "context_id": { "type": "string" },
+    "capability": { "type": "string" },
+    "objective": { "type": "string", "minLength": 1 },
+    "output_spec": {
+      "type": "object",
+      "required": ["format"],
+      "additionalProperties": false,
+      "properties": {
+        "format": { "type": "string" },
+        "artifacts": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "parameters": { "type": "object" },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "uri"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "uri": { "type": "string" },
+              "mediaType": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tokens": { "type": "integer", "minimum": 1 },
+        "deadline": { "type": "string", "format": "date-time" }
+      }
+    },
+    "constraints": { "type": "array", "items": { "type": "string" } }
+  }
+}

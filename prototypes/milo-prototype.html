@@ -1,0 +1,770 @@
+<title>Milo 原型</title>
+<style>
+  :root {
+    --paper: #F5F6F2;
+    --panel: #FFFFFF;
+    --panel-2: #EDEFEA;
+    --ink: #22282B;
+    --ink-2: #59615D;
+    --ink-3: #8B928D;
+    --line: #DDE0DA;
+    --pine: #3E6B54;
+    --pine-deep: #24382E;
+    --pine-soft: #E3ECE6;
+    --amber: #B07830;
+    --amber-soft: #F4E9D9;
+    --crit: #A8402F;
+    --crit-soft: #F5E2DD;
+    --rail-bg: #1E2B24;
+    --rail-ink: #C6D2CA;
+    --rail-hl: #33453B;
+    --code-bg: #1C231F;
+    --code-ink: #D4DCD5;
+    --code-cmt: #778579;
+    --shadow: 0 1px 3px rgba(30,43,36,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #141815; --panel: #1C211D; --panel-2: #242A25;
+      --ink: #E3E7E2; --ink-2: #A7B0A9; --ink-3: #79827B; --line: #30372F;
+      --pine: #85B199; --pine-deep: #A8C9B6; --pine-soft: #263429;
+      --amber: #D2A05C; --amber-soft: #3A2F1D;
+      --crit: #D97B66; --crit-soft: #3D241E;
+      --rail-bg: #10160F; --rail-ink: #A9B5AC; --rail-hl: #26302A;
+      --code-bg: #10140F; --code-ink: #CBD4CC; --code-cmt: #6C7A6E;
+      --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #141815; --panel: #1C211D; --panel-2: #242A25;
+    --ink: #E3E7E2; --ink-2: #A7B0A9; --ink-3: #79827B; --line: #30372F;
+    --pine: #85B199; --pine-deep: #A8C9B6; --pine-soft: #263429;
+    --amber: #D2A05C; --amber-soft: #3A2F1D;
+    --crit: #D97B66; --crit-soft: #3D241E;
+    --rail-bg: #10160F; --rail-ink: #A9B5AC; --rail-hl: #26302A;
+    --code-bg: #10140F; --code-ink: #CBD4CC; --code-cmt: #6C7A6E; --shadow: none;
+  }
+  :root[data-theme="light"] {
+    --paper: #F5F6F2; --panel: #FFFFFF; --panel-2: #EDEFEA;
+    --ink: #22282B; --ink-2: #59615D; --ink-3: #8B928D; --line: #DDE0DA;
+    --pine: #3E6B54; --pine-deep: #24382E; --pine-soft: #E3ECE6;
+    --amber: #B07830; --amber-soft: #F4E9D9;
+    --crit: #A8402F; --crit-soft: #F5E2DD;
+    --rail-bg: #1E2B24; --rail-ink: #C6D2CA; --rail-hl: #33453B;
+    --code-bg: #1C231F; --code-ink: #D4DCD5; --code-cmt: #778579;
+    --shadow: 0 1px 3px rgba(30,43,36,.08);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    font-size: 14px; line-height: 1.65;
+  }
+  .mono, code, pre, textarea { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  button { font-family: inherit; cursor: pointer; }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--pine); outline-offset: 2px; }
+
+  /* ---------- app frame ---------- */
+  .app { display: flex; min-height: 100vh; }
+  .rail {
+    width: 208px; flex: none; background: var(--rail-bg); color: var(--rail-ink);
+    display: flex; flex-direction: column; padding: 18px 12px;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .logo { display: flex; align-items: baseline; gap: 8px; padding: 0 10px 18px; }
+  .logo b { font-family: "Songti SC", "Noto Serif CJK SC", serif; font-size: 22px; color: #fff; letter-spacing: .02em; }
+  :root[data-theme="dark"] .logo b { color: #E3E7E2; }
+  .logo small { font-size: 11px; opacity: .7; }
+  .rail nav { display: flex; flex-direction: column; gap: 2px; }
+  .rail button.nav {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: none; border: none; color: var(--rail-ink);
+    padding: 9px 10px; border-radius: 7px; font-size: 13.5px; text-align: left;
+  }
+  .rail button.nav:hover { background: var(--rail-hl); }
+  .rail button.nav.on { background: var(--rail-hl); color: #fff; font-weight: 600; }
+  :root[data-theme="dark"] .rail button.nav.on { color: #E9EDE8; }
+  .rail .badge { margin-left: auto; background: var(--amber); color: #fff; border-radius: 999px; font-size: 11px; padding: 0 7px; line-height: 18px; }
+  .rail .foot { margin-top: auto; padding: 10px; font-size: 11.5px; opacity: .6; line-height: 1.6; }
+
+  .stage { flex: 1; min-width: 0; }
+  .topbar {
+    display: flex; align-items: center; gap: 14px; padding: 12px 28px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 700; }
+  .topbar .crumb { color: var(--ink-3); font-size: 12.5px; }
+  .topbar .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .org-pill { background: var(--pine-soft); color: var(--pine); font-weight: 600; font-size: 12.5px; padding: 4px 12px; border-radius: 999px; }
+  select.org-pill { border: none; cursor: pointer; font-family: inherit; }
+  .content { padding: 24px 28px 80px; max-width: 1080px; }
+
+  .screen { display: none; }
+  .screen.on { display: block; }
+
+  /* ---------- shared bits ---------- */
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  .grid { display: grid; gap: 16px; }
+  .chip { display: inline-block; font-size: 11.5px; padding: 1px 9px; border-radius: 999px; background: var(--panel-2); color: var(--ink-2); }
+  .chip.ok { background: var(--pine-soft); color: var(--pine); font-weight: 600; }
+  .chip.warn { background: var(--amber-soft); color: var(--amber); font-weight: 600; }
+  .chip.crit { background: var(--crit-soft); color: var(--crit); font-weight: 600; }
+  .btn {
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    border-radius: 7px; padding: 6px 14px; font-size: 13px;
+  }
+  .btn:hover { border-color: var(--ink-3); }
+  .btn.primary { background: var(--pine); border-color: var(--pine); color: #fff; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  :root[data-theme="dark"] .btn.primary { color: #10160F; }
+  .btn.ghost-crit { color: var(--crit); border-color: var(--crit-soft); }
+  .btn[disabled] { opacity: .5; cursor: default; }
+  .sec-title { font-size: 13px; font-weight: 700; letter-spacing: .08em; color: var(--ink-3); margin: 26px 0 10px; }
+  .sec-title:first-child { margin-top: 0; }
+
+  /* ---------- dashboard ---------- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .stat { padding: 14px 16px; }
+  .stat .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .stat .v small { font-size: 13px; color: var(--ink-3); font-weight: 500; }
+  .stat .l { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .stat .h { font-size: 11px; color: var(--ink-3); margin-top: 4px; }
+  .stat.alert { border-left: 3px solid var(--amber); }
+
+  .decide { padding: 0; overflow: hidden; }
+  .decide-item { display: flex; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: flex-start; }
+  .decide-item:last-child { border-bottom: none; }
+  .decide-item .stripe { width: 4px; align-self: stretch; border-radius: 2px; background: var(--amber); flex: none; }
+  .decide-item .stripe.crit { background: var(--crit); }
+  .decide-item .body { flex: 1; min-width: 0; }
+  .decide-item .who { font-size: 12px; color: var(--ink-3); margin-bottom: 2px; }
+  .decide-item .q { font-weight: 600; margin-bottom: 4px; }
+  .decide-item .why { font-size: 12.5px; color: var(--ink-2); margin-bottom: 10px; }
+  .decide-item .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .empty { padding: 26px 18px; text-align: center; color: var(--ink-3); font-size: 13px; }
+
+  .orgchart { padding: 22px; overflow-x: auto; }
+  .tree { display: flex; flex-direction: column; align-items: center; min-width: 560px; }
+  .stem { width: 1px; height: 16px; background: var(--line); }
+  .tier { display: flex; gap: 14px; }
+  .node {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 14px; text-align: center; min-width: 128px; font-size: 12.5px;
+  }
+  .node b { display: block; font-size: 13px; }
+  .node small { color: var(--ink-2); font-size: 11px; }
+  .node .st { margin-top: 5px; }
+  .node.dept { border-style: dashed; }
+  .node.conductor { background: var(--pine-soft); border-color: var(--pine); }
+  .node.conductor b { color: var(--pine); }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+  .dot.busy { background: var(--amber); }
+  .dot.idle { background: var(--pine); }
+  .dot.wait { background: var(--crit); }
+
+  .feed { padding: 4px 18px; }
+  .feed-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .feed-item:last-child { border-bottom: none; }
+  .feed-item time { color: var(--ink-3); font-size: 12px; flex: none; width: 42px; font-variant-numeric: tabular-nums; }
+  .feed-item .who { color: var(--pine); font-weight: 600; flex: none; }
+  .feed-item .txt { color: var(--ink-2); }
+
+  /* ---------- conductor chat ---------- */
+  .chat { max-width: 780px; display: flex; flex-direction: column; gap: 16px; }
+  .msg { display: flex; gap: 12px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+  .avatar.user { background: var(--panel-2); color: var(--ink-2); }
+  .avatar.milo { background: var(--pine); color: #fff; }
+  :root[data-theme="dark"] .avatar.milo { color: #10160F; }
+  .bubble { flex: 1; min-width: 0; }
+  .bubble .name { font-size: 12px; color: var(--ink-3); margin-bottom: 4px; }
+  .bubble .txt { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; box-shadow: var(--shadow); }
+  .msg.user .txt { background: var(--panel-2); }
+  .bubble p { margin: 0 0 8px; } .bubble p:last-child { margin-bottom: 0; }
+
+  .plan { border: 1px solid var(--pine); border-radius: 10px; overflow: hidden; margin-top: 10px; }
+  .plan-head { background: var(--pine-soft); padding: 10px 16px; font-weight: 700; font-size: 13px; color: var(--pine); display: flex; align-items: center; gap: 8px; }
+  .plan ol { margin: 0; padding: 12px 16px 12px 36px; }
+  .plan li { margin-bottom: 6px; font-size: 13px; }
+  .plan li small { color: var(--ink-3); display: block; }
+  .plan-foot { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); align-items: center; flex-wrap: wrap; }
+  .plan-foot .note { font-size: 12px; color: var(--ink-3); margin-left: auto; }
+
+  .status3 { border-left: 3px solid var(--pine); border-radius: 6px; background: var(--panel-2); padding: 10px 14px; margin-top: 10px; font-size: 13px; display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; }
+  .status3 dt { color: var(--ink-3); font-size: 12px; font-weight: 600; }
+  .status3 dd { margin: 0; }
+
+  .esc { border: 1px solid var(--amber); border-radius: 10px; overflow: hidden; margin-top: 10px; }
+  .esc-head { background: var(--amber-soft); color: var(--amber); font-weight: 700; font-size: 13px; padding: 10px 16px; }
+  .esc-body { padding: 12px 16px; font-size: 13px; }
+  .esc-body .kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 8px 0; font-size: 12.5px; }
+  .esc-body .kv dt { color: var(--ink-3); } .esc-body .kv dd { margin: 0; }
+  .esc-foot { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+
+  .progress-toggle { font-size: 12.5px; color: var(--ink-3); background: none; border: none; padding: 4px 0; }
+  .progress-toggle:hover { color: var(--ink); }
+  .progress-list { border-left: 2px solid var(--line); margin: 8px 0 0 6px; padding-left: 16px; display: none; }
+  .progress-list.open { display: block; }
+  .progress-list .pi { font-size: 12.5px; color: var(--ink-2); padding: 4px 0; }
+  .progress-list .pi time { color: var(--ink-3); margin-right: 8px; font-variant-numeric: tabular-nums; }
+
+  .composer { display: flex; gap: 10px; margin-top: 20px; max-width: 780px; }
+  .composer input {
+    flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px;
+    font-family: inherit; font-size: 14px; background: var(--panel); color: var(--ink);
+  }
+  .composer input:focus { outline: 2px solid var(--pine); outline-offset: -1px; }
+
+  /* ---------- market ---------- */
+  .market-top { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .market-top input { flex: 1; min-width: 220px; border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; font-size: 13.5px; background: var(--panel); color: var(--ink); font-family: inherit; }
+  .packs { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .pack { padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .pack .top { display: flex; align-items: baseline; gap: 8px; }
+  .pack h3 { margin: 0; font-size: 15px; }
+  .pack .ver { font-size: 11.5px; color: var(--ink-3); }
+  .pack .desc { font-size: 12.5px; color: var(--ink-2); flex: 1; }
+  .pack .caps { display: flex; gap: 6px; flex-wrap: wrap; }
+  .qc { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border-radius: 7px; padding: 8px 12px; font-size: 12px; }
+  .qc .score { font-size: 18px; font-weight: 700; color: var(--pine); font-variant-numeric: tabular-nums; }
+  .qc .det { color: var(--ink-2); line-height: 1.45; }
+  .pack .foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .pack .author { font-size: 12px; color: var(--ink-3); margin-right: auto; }
+
+  /* ---------- editor ---------- */
+  .ed-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+  .ed-tabs button {
+    background: none; border: none; border-bottom: 2px solid transparent;
+    padding: 8px 16px; font-size: 13.5px; color: var(--ink-2);
+  }
+  .ed-tabs button.on { color: var(--pine); border-bottom-color: var(--pine); font-weight: 700; }
+  .ed-pane { display: none; } .ed-pane.on { display: block; }
+  .ed-note { font-size: 12.5px; color: var(--ink-3); margin-bottom: 12px; }
+
+  .form-block { padding: 16px 20px; margin-bottom: 14px; }
+  .form-block h4 { margin: 0 0 10px; font-size: 13.5px; }
+  .rule { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .rule:last-child { border-bottom: none; }
+  .rule select, .rule .cel {
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 12.5px;
+    background: var(--panel); color: var(--ink);
+  }
+  .rule .cel { font-family: ui-monospace, Menlo, monospace; background: var(--panel-2); }
+  .rule .to { color: var(--ink-3); font-size: 12px; }
+
+  pre.yaml {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 18px 20px; font-size: 12.5px; line-height: 1.7; overflow-x: auto; margin: 0;
+  }
+  pre.yaml .c { color: var(--code-cmt); }
+  pre.yaml .k { color: #9CC5AD; }
+  pre.yaml mark { background: rgba(210,160,92,.25); color: inherit; border-radius: 3px; padding: 0 2px; }
+
+  .lint { margin-top: 14px; }
+  .lint-item { display: flex; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 13px; align-items: baseline; }
+  .lint-item:last-child { border-bottom: none; }
+  .lint-item .sev { flex: none; font-size: 11px; font-weight: 700; border-radius: 4px; padding: 1px 8px; }
+  .lint-item .sev.err { background: var(--crit-soft); color: var(--crit); }
+  .lint-item .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .lint-item .loc { color: var(--ink-3); font-size: 12px; flex: none; }
+
+  /* ---------- toast ---------- */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--pine-deep); color: #EAF0EB; padding: 10px 20px; border-radius: 8px;
+    font-size: 13px; transition: transform .25s ease; z-index: 50; max-width: 90vw;
+  }
+  :root[data-theme="dark"] #toast { background: #2E3D33; color: #E3E7E2; }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+
+  .proto-note {
+    margin-top: 34px; border-top: 1px dashed var(--line); padding-top: 12px;
+    font-size: 12px; color: var(--ink-3); max-width: 46em;
+  }
+  @media (max-width: 820px) {
+    .rail { width: 60px; padding: 14px 6px; }
+    .rail .logo b { font-size: 14px; } .rail .logo small, .rail .nav-label, .rail .foot { display: none; }
+    .rail button.nav { justify-content: center; padding: 10px 6px; }
+    .content { padding: 18px 14px 60px; }
+  }
+</style>
+
+<div class="app">
+  <aside class="rail">
+    <div class="logo"><b>Milo</b><small>AI 组织指挥台</small></div>
+    <nav>
+      <button class="nav on" data-screen="dash" type="button"><span>🏠</span><span class="nav-label">组织仪表盘</span><span class="badge" id="pendingBadge">2</span></button>
+      <button class="nav" data-screen="chat" type="button"><span>💬</span><span class="nav-label">秘书长 · 指挥</span></button>
+      <button class="nav" data-screen="market" type="button"><span>🛒</span><span class="nav-label">人才市场</span></button>
+      <button class="nav" data-screen="editor" type="button"><span>🗂</span><span class="nav-label">编制编辑器</span></button>
+    </nav>
+    <div class="foot">原型 v0.1 · 用于设计评审<br>due-diligence-inc</div>
+  </aside>
+
+  <div class="stage">
+    <div class="topbar">
+      <h1 id="screenTitle">组织仪表盘</h1>
+      <span class="crumb" id="screenCrumb">尽调组织 · 4 名成员 · 1 个部门</span>
+      <div class="right">
+        <select class="org-pill" id="orgSwitch" aria-label="切换组织">
+          <option>尽调团队 due-diligence-inc</option>
+          <option>科研课题组 ai-lab-101</option>
+          <option>内容工作室 studio-nova</option>
+          <option>＋ 从模板新建组织…</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ============ 仪表盘 ============ -->
+      <section class="screen on" id="screen-dash">
+        <div class="sec-title">待你决定 · 阻塞通道（只有需要决策的事项才会出现在这里）</div>
+        <div class="card decide" id="decideList">
+          <div class="decide-item" data-decide="1">
+            <div class="stripe crit"></div>
+            <div class="body">
+              <div class="who">法务部 · 任务 t-8f3a「股权转让协议审查」 · 3 分钟前</div>
+              <div class="q">请求访问外部网络：court.gov.cn（检索类案判例）</div>
+              <div class="why">触发策略 external-side-effect（actions: block）。该成员的 MiloPack 未声明此域名权限。需要你决定是否放行。</div>
+              <div class="acts">
+                <button class="btn primary" type="button" data-act="allow-once">仅本次放行</button>
+                <button class="btn" type="button" data-act="allow-always">加入白名单并放行</button>
+                <button class="btn ghost-crit" type="button" data-act="deny">拒绝，改用本地判例库</button>
+              </div>
+            </div>
+          </div>
+          <div class="decide-item" data-decide="2">
+            <div class="stripe"></div>
+            <div class="body">
+              <div class="who">财务分析成员 · 任务 t-8f41「财务模型复核」 · 12 分钟前</div>
+              <div class="q">置信度过低（0.52 &lt; 0.6）：目标组织 2025 年报的存货口径存在两种解读</div>
+              <div class="why">触发策略 low-confidence（actions: escalate）。成员给出两个版本的测算，需要你选择口径后继续。</div>
+              <div class="acts">
+                <button class="btn primary" type="button" data-act="opt-a">采用口径 A（审计报告附注）</button>
+                <button class="btn" type="button" data-act="opt-b">采用口径 B（管理层口径）</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec-title">组织健康度（本周）</div>
+        <div class="stats">
+          <div class="card stat"><div class="v">3<small> / 5</small></div><div class="l">并行成员数</div><div class="h">上限 5（监督幅度护栏）</div></div>
+          <div class="card stat"><div class="v" id="statPending">2</div><div class="l">待批队列</div><div class="h">背压阈值 3，超过自动降并行</div></div>
+          <div class="card stat"><div class="v">1.4<small> 次/任务</small></div><div class="l">平均打扰次数</div><div class="h">目标 ≤ 2</div></div>
+          <div class="card stat alert"><div class="v">31%</div><div class="l">升级 override 率</div><div class="h">偏高——建议收敛 low-confidence 策略</div></div>
+        </div>
+
+        <div class="sec-title">组织架构（实时状态）</div>
+        <div class="card orgchart">
+          <div class="tree">
+            <div class="node"><b>你</b><small>组织所有者</small></div>
+            <div class="stem"></div>
+            <div class="node conductor"><b>秘书长</b><small>任务分解 · 路由 · 汇报中枢</small></div>
+            <div class="stem"></div>
+            <div class="tier">
+              <div class="node"><b>市场调研成员</b><small>market-researcher@2.0</small><div class="st"><span class="dot busy"></span><span class="chip">working · t-8f3d</span></div></div>
+              <div class="node"><b>财务分析成员</b><small>financial-analyst@1.4</small><div class="st"><span class="dot wait"></span><span class="chip warn">等你决定</span></div></div>
+              <div class="node dept"><b>法务部</b><small>legal-review@1.2 · 2 名成员</small><div class="st"><span class="dot wait"></span><span class="chip warn">等你决定</span></div></div>
+              <div class="node"><b>新闻扫描成员</b><small>news-scanner@0.9</small><div class="st"><span class="dot idle"></span><span class="chip ok">空闲</span></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec-title">进度通道 · 拉取式（不会推送打扰，攒批到这里）</div>
+        <div class="card feed">
+          <div class="feed-item"><time>14:32</time><span class="who">市场调研</span><span class="txt">完成目标组织竞品图谱初稿，产出 artifact：competitor-map.md（引用 23 条）</span></div>
+          <div class="feed-item"><time>14:18</time><span class="who">法务部</span><span class="txt">合同初审完成 6/9 份，2 份标记高风险条款，进入复核</span></div>
+          <div class="feed-item"><time>13:55</time><span class="who">秘书长</span><span class="txt">任务 t-8f3a 按 pipeline full-dd-report 派发：collect ✓ → legal-review（进行中）→ synthesize（等待依赖）</span></div>
+          <div class="feed-item"><time>13:40</time><span class="who">财务分析</span><span class="txt">已取得 collect 阶段 artifact，开始三表勾稽核对</span></div>
+        </div>
+
+        <p class="proto-note">设计还原点：双通道汇报（待你决定 = 即时；进度 = 拉取）· 升级卡片带四维判定来源 · override 率作为健康指标 · 组织图只读 · 并行度/背压护栏可见。</p>
+      </section>
+
+      <!-- ============ 前台指挥 ============ -->
+      <section class="screen" id="screen-chat">
+        <div class="chat">
+          <div class="msg user">
+            <div class="avatar user">你</div>
+            <div class="bubble">
+              <div class="name">你 · 13:02</div>
+              <div class="txt"><p>对「星野科技」做一次完整尽调，重点看股权结构和对赌条款，周五前给我报告。</p></div>
+            </div>
+          </div>
+
+          <div class="msg">
+            <div class="avatar milo">M</div>
+            <div class="bubble">
+              <div class="name">秘书长 · 13:03</div>
+              <div class="txt">
+                <p>收到。我把它分解成了下面的计划（匹配 pipeline：full-dd-report），批准后授权执行到里程碑 2，偏离计划会重新向你上报：</p>
+                <div class="plan">
+                  <div class="plan-head">执行计划 · 待批准</div>
+                  <ol>
+                    <li><b>信息收集</b>（市场调研成员 ∥ 新闻扫描成员，并行）<small>工商/股权穿透、竞品、舆情 · 预算 40 万 token · 预计 40 分钟</small></li>
+                    <li><b>合同与合规审查</b>（法务部）<small>依赖①的股权文件 artifact · 重点对赌条款 · 预计 2 小时</small></li>
+                    <li><b>财务复核与综合</b>（财务分析成员）<small>依赖①② · 交付：尽调报告.md + 风险清单 · 周五 12:00 前</small></li>
+                  </ol>
+                  <div class="plan-foot" id="planFoot">
+                    <button class="btn primary" type="button" id="planApprove">批准执行</button>
+                    <button class="btn" type="button" id="planEdit">修改计划</button>
+                    <span class="note">强串行段（报告撰写）已按拓扑自适应改为单成员承接</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="msg">
+            <div class="avatar milo">M</div>
+            <div class="bubble">
+              <div class="name">秘书长 · 14:18 · 里程碑 1 完成</div>
+              <div class="txt">
+                <p>信息收集完成。法务部已开始合同审查，当前状态：</p>
+                <dl class="status3">
+                  <dt>在做什么</dt><dd>逐份审查 9 份合同中的对赌与回购条款（已完成 6 份）</dd>
+                  <dt>为什么</dt><dd>①阶段股权穿透发现两层持股平台，对赌义务主体需要逐层确认</dd>
+                  <dt>置信度 / 风险</dt><dd>0.83 · 风险：2 份合同缺少签署页扫描件，可能需要你补充材料</dd>
+                </dl>
+                <button class="progress-toggle" type="button" data-toggle="pg1">▸ 展开过程记录（12 条，默认折叠）</button>
+                <div class="progress-list" id="pg1">
+                  <div class="pi"><time>14:18</time>legal-review 交付初审清单 artifact（review-draft.md）</div>
+                  <div class="pi"><time>14:02</time>初审成员标记《增资协议》§7.2 回购触发条件为高风险</div>
+                  <div class="pi"><time>13:47</time>秘书长 将股权文件 artifact 按引用传递给法务部（不经消息转述）</div>
+                  <div class="pi"><time>13:41</time>市场调研交付 equity-structure.md · 新闻扫描交付 media-scan.md</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="msg" id="escMsg">
+            <div class="avatar milo">M</div>
+            <div class="bubble">
+              <div class="name">秘书长 · 14:41 · 需要你决定</div>
+              <div class="txt">
+                <div class="esc" id="escCard">
+                  <div class="esc-head">⚠ 升级请求：外部网络访问</div>
+                  <div class="esc-body">
+                    <p style="margin:0;">法务部希望访问 <code>court.gov.cn</code> 检索类案判例，用于评估 §7.2 回购条款的可执行性。</p>
+                    <dl class="kv">
+                      <dt>触发策略</dt><dd>external-side-effect（block）——包权限未声明该域名</dd>
+                      <dt>可逆性</dt><dd>只读检索，可逆</dd>
+                      <dt>影响范围</dt><dd>外部（公开司法数据库）</dd>
+                      <dt>不放行的替代</dt><dd>使用本地判例库（覆盖度约 60%，结论置信度会下降）</dd>
+                    </dl>
+                  </div>
+                  <div class="esc-foot">
+                    <button class="btn primary" type="button" data-esc="once">仅本次放行</button>
+                    <button class="btn" type="button" data-esc="always">加白名单并放行</button>
+                    <button class="btn ghost-crit" type="button" data-esc="deny">拒绝</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="composer">
+          <input type="text" placeholder="向秘书长下达任务或提问…（原型中回车仅作演示）" id="chatInput" aria-label="向秘书长下达任务">
+          <button class="btn primary" type="button" id="chatSend">发送</button>
+        </div>
+        <p class="proto-note">设计还原点：计划前置授权（批准即授权到里程碑）· 三槽位状态汇报 · 升级卡片附四维判定与替代方案 · 过程记录默认折叠（摘要先行，可下钻）· 用户只与 秘书长 对话。</p>
+      </section>
+
+      <!-- ============ 人才市场 ============ -->
+      <section class="screen" id="screen-market">
+        <div class="market-top">
+          <input type="text" placeholder="搜索能力、行业、作者…  如：contract-review" aria-label="搜索 Agent">
+          <button class="btn" type="button">能力 ▾</button>
+          <button class="btn" type="button">评分 ≥4.0 ▾</button>
+          <button class="btn" type="button">价格 ▾</button>
+        </div>
+
+        <div class="grid packs">
+          <div class="card pack">
+            <div class="top"><h3>法务合同审查专家</h3><span class="ver">legal-contract-reviewer @1.4.0</span></div>
+            <div class="caps"><span class="chip">contract-review</span><span class="chip">legal-risk-analysis</span><span class="chip">中文合同</span></div>
+            <p class="desc">对赌、回购、竞业条款的深度审查。要求 reasoning 档模型；依赖可选 MCP：court-case-search。</p>
+            <div class="qc">
+              <span class="score">4.6</span>
+              <span class="det">平台复跑 ✓ 通过（28 例评测集 · rubric 5 档）<br>SkillScan ✓ · 权限声明：网络 1 域名 · 文件只读</span>
+            </div>
+            <div class="foot"><span class="author">@zhangsan · 下载 1.2k</span><span class="chip ok">已加入</span><button class="btn" type="button" disabled>已在组织</button></div>
+          </div>
+
+          <div class="card pack">
+            <div class="top"><h3>行业研究员 Pro</h3><span class="ver">industry-researcher @3.1.2</span></div>
+            <div class="caps"><span class="chip">market-research</span><span class="chip">competitor-analysis</span></div>
+            <p class="desc">多源信息收集 + 引用核对，输出带引用的行业图谱。含 4 个技能包，全部通过 SkillScan。</p>
+            <div class="qc">
+              <span class="score">4.8</span>
+              <span class="det">平台复跑 ✓ 通过（41 例 · 含引用准确率专项）<br>权限声明：网络 open · 建议沙箱运行</span>
+            </div>
+            <div class="foot"><span class="author">@deepwater · 下载 3.4k · ¥49/月</span><button class="btn primary" type="button" data-hire="行业研究员 Pro">招募</button></div>
+          </div>
+
+          <div class="card pack">
+            <div class="top"><h3>财务尽调分析师</h3><span class="ver">fin-dd-analyst @2.0.0</span></div>
+            <div class="caps"><span class="chip">financial-analysis</span><span class="chip">three-statement</span></div>
+            <p class="desc">三表勾稽、异常科目识别、估值交叉验证。评测集覆盖 A 股/美股/新三板年报。</p>
+            <div class="qc">
+              <span class="score">4.3</span>
+              <span class="det">平台复跑 ✓ 通过（19 例）<br>权限声明：无外部网络 · python_repl: true（沙箱强制）</span>
+            </div>
+            <div class="foot"><span class="author">@quantfox · 下载 890</span><button class="btn primary" type="button" data-hire="财务尽调分析师">招募</button></div>
+          </div>
+
+          <div class="card pack">
+            <div class="top"><h3>法务部（成建制）</h3><span class="ver">teams/legal-review @1.2.0</span></div>
+            <div class="caps"><span class="chip">department</span><span class="chip">初审+复核双成员</span></div>
+            <p class="desc">组织模板：含初审、复核两名成员与内部验收流程。对外暴露类型化接口（contract_files → review_report）。</p>
+            <div class="qc">
+              <span class="score">4.5</span>
+              <span class="det">部门级评测 ✓（端到端 12 例）<br>导入时需重绑 model_bindings 与密钥</span>
+            </div>
+            <div class="foot"><span class="author">@milo-official · 下载 2.1k</span><span class="chip ok">已加入</span><button class="btn" type="button" disabled>已在组织</button></div>
+          </div>
+          <div class="card pack">
+            <div class="top"><h3>科研课题组（组织模板）</h3><span class="ver">orgs/ai-research-lab @1.0.0</span></div>
+            <div class="caps"><span class="chip">organization-template</span><span class="chip">3 成员 + 1 流水线</span></div>
+            <p class="desc">完整组织模板：文献检索、实验分析、论文写作三名成员 + paper-pipeline 流水线与升级策略。导入即得一个可运行的课题组。</p>
+            <div class="qc">
+              <span class="score">4.4</span>
+              <span class="det">端到端评测 ✓（8 例：综述 / 复现 / 投稿检查）<br>导入时重绑 model_bindings 与密钥</span>
+            </div>
+            <div class="foot"><span class="author">@milo-official · 下载 1.6k</span><button class="btn primary" type="button" data-hire="科研课题组模板">导入模板</button></div>
+          </div>
+        </div>
+        <p class="proto-note">设计还原点：质检报告前置（评分来自平台复跑 llm-space 评测集，非用户评论）· 权限声明即卖点（越收敛越省心）· 部门与整个组织都可成建制分发 · 导入重绑凭据 · 场景不限于企业。</p>
+      </section>
+
+      <!-- ============ 编制编辑器 ============ -->
+      <section class="screen" id="screen-editor">
+        <div class="ed-tabs" role="tablist">
+          <button class="on" data-pane="ed-org" type="button" role="tab">组织图（只读）</button>
+          <button data-pane="ed-form" type="button" role="tab">表单编辑</button>
+          <button data-pane="ed-file" type="button" role="tab">文件 org.yaml</button>
+        </div>
+
+        <div class="ed-pane on" id="ed-org">
+          <p class="ed-note">组织图用于查看编制与实时状态，不支持拖线编辑——修改请使用表单或文件模式。</p>
+          <div class="card orgchart">
+            <div class="tree">
+              <div class="node conductor"><b>秘书长</b><small>miloorg/v1alpha1 · generation 3</small></div>
+              <div class="stem"></div>
+              <div class="tier">
+                <div class="node"><b>market-researcher</b><small>@sha256:ab12… · container</small></div>
+                <div class="node"><b>financial-analyst</b><small>@1.4.0 · container</small></div>
+                <div class="node dept"><b>legal（部门）</b><small>uses: legal-review@1.2.0<br>接口：contract_files → review_report</small></div>
+                <div class="node"><b>news-scanner</b><small>@0.9.1 · embedded（本地）</small></div>
+              </div>
+              <div class="stem"></div>
+              <div class="node" style="border-style:dashed; background:transparent;"><small>限额：并行 ≤5 · 部门深度 ≤2 · 背压阈值 3 · 成员间无直连，一切经 秘书长 + artifact</small></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ed-pane" id="ed-form">
+          <div class="card form-block">
+            <h4>路由规则（有序匹配，条件构建器生成 CEL）</h4>
+            <div class="rule">
+              <span class="chip">1</span>
+              <span>当</span><span class="cel">task.capability in ["contract-review", "legal-risk"]</span>
+              <span class="to">→ 派给</span>
+              <select aria-label="规则1指派对象"><option>法务部（legal）</option><option>financial-analyst</option></select>
+            </div>
+            <div class="rule">
+              <span class="chip">2</span>
+              <span>当</span><span class="cel">task.tags.exists(t, t == "finance")</span>
+              <span class="to">→ 派给</span>
+              <select aria-label="规则2指派对象"><option>financial-analyst</option><option>法务部（legal）</option></select>
+            </div>
+            <div class="rule">
+              <span class="chip">default</span>
+              <span>无规则命中时</span>
+              <select aria-label="默认行为"><option>询问我（ask_user）</option><option>拒绝任务（reject）</option></select>
+              <span class="to">（必填兜底）</span>
+            </div>
+          </div>
+          <div class="card form-block">
+            <h4>升级策略（何时打扰你）</h4>
+            <div class="rule"><span class="chip crit">block</span><span class="cel">action.permissions.network_external</span><span class="to">外部副作用一律拦停请示</span></div>
+            <div class="rule"><span class="chip warn">escalate</span><span class="cel">report.confidence &lt; 0.6</span><span class="to">低置信度上报（本周 override 31%，建议阈值降到 0.5）</span></div>
+            <div class="rule"><span class="chip">warn</span><span class="cel">usage.tokens &gt; task.budget.tokens * 0.8</span><span class="to">预算 80% 仅记录，不打扰</span></div>
+          </div>
+        </div>
+
+        <div class="ed-pane" id="ed-file">
+          <pre class="yaml"><span class="k">apiVersion:</span> milo.dev/v1alpha1
+<span class="k">kind:</span> Organization
+<span class="k">metadata:</span> {name: due-diligence-inc, version: 1.3.0}
+<span class="k">spec:</span>
+  <span class="k">employees:</span>
+    - {name: market-researcher, pack: registry.milo.dev/market-researcher@sha256:ab12…}
+    - {name: financial-analyst, pack: registry.milo.dev/fin-dd-analyst@1.4.0}
+    - {name: news-scanner, pack: <mark>./local-packs/news-scanner</mark>, runtime: {mode: embedded}}
+  <span class="k">departments:</span>
+    - name: legal
+      uses: registry.milo.dev/teams/legal-review@1.2.0
+      inputs:  [{name: contract_files, type: artifact, required: true}]
+      outputs: [{name: review_report, type: artifact}]
+  <span class="k">routing:</span>
+    rules:
+      - {match: 'task.capability in ["contract-review", "legal-risk"]', assign: legal}
+      - {match: 'task.tags.exists(t, t == "finance")', assign: financial-analyst}
+      - {match: <mark>'task.capability == "media-scan"'</mark>, assign: news-scanner}
+    default: ask_user
+  <span class="k">escalation:</span>
+    policies:
+      - {name: external-side-effect, when: 'action.permissions.network_external', actions: [block]}
+      - {name: low-confidence, when: 'report.confidence &lt; 0.6', actions: [escalate]}
+  <span class="k">limits:</span> {maxParallelEmployees: 5, maxDepartmentDepth: 2, pendingQueueBackpressure: 3}</pre>
+
+          <div class="card lint">
+            <div class="lint-item"><span class="sev err">错误</span><span class="loc">employees[2].pack</span><span>本地路径引用未 pin 版本——发布组织模板前必须解析为 registry 内容寻址引用</span></div>
+            <div class="lint-item"><span class="sev warn">警告</span><span class="loc">routing.rules[2]</span><span>news-scanner 的能力声明中不包含 media-scan，此规则可能永远路由失败（能力覆盖缺口）</span></div>
+            <div class="lint-item"><span class="sev warn">警告</span><span class="loc">escalation</span><span>low-confidence 策略本周 override 率 31%——打扰过多正在透支告警可信度，建议下调阈值或改为 warn 灰度</span></div>
+          </div>
+        </div>
+        <p class="proto-note">设计还原点：三视图（只读图 / 表单 / 文件双向同步）· 不做连线画布 · CEL 唯一表达式语言 · lint 含结构错误与语义警告（能力覆盖缺口、打扰风暴预测）· 硬护栏在图中可见但不可编辑。</p>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  var titles = {
+    dash:   ["组织仪表盘", "尽调组织 · 4 名成员 · 1 个部门"],
+    chat:   ["秘书长 · 指挥", "你只需要和秘书长对话，组织内部由它调度"],
+    market: ["人才市场", "带质检报告的 Agent · 平台复跑评分"],
+    editor: ["编制编辑器", "org.yaml · miloorg/v1alpha1 · generation 3"]
+  };
+  var navs = document.querySelectorAll('.rail button.nav');
+  navs.forEach(function (b) {
+    b.addEventListener('click', function () {
+      navs.forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('on'); });
+      var key = b.getAttribute('data-screen');
+      document.getElementById('screen-' + key).classList.add('on');
+      document.getElementById('screenTitle').textContent = titles[key][0];
+      document.getElementById('screenCrumb').textContent = titles[key][1];
+      window.scrollTo(0, 0);
+    });
+  });
+
+  var toastEl = document.getElementById('toast'), toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2600);
+  }
+
+  var pending = 2;
+  function setPending(n) {
+    pending = n;
+    document.getElementById('pendingBadge').textContent = n;
+    document.getElementById('pendingBadge').style.display = n ? '' : 'none';
+    var sp = document.getElementById('statPending');
+    if (sp) sp.textContent = n;
+  }
+
+  var decideMsgs = {
+    'allow-once': '已放行本次访问，法务部继续检索类案（决策已记录审计）',
+    'allow-always': '已将 court.gov.cn 加入组织白名单并放行',
+    'deny': '已拒绝。法务部改用本地判例库，结论置信度将下调',
+    'opt-a': '已采用口径 A，财务分析成员继续测算',
+    'opt-b': '已采用口径 B，财务分析成员继续测算'
+  };
+  document.querySelectorAll('.decide-item .acts .btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var item = b.closest('.decide-item');
+      item.remove();
+      setPending(pending - 1);
+      toast(decideMsgs[b.getAttribute('data-act')] || '决策已下发');
+      if (!document.querySelector('#decideList .decide-item')) {
+        document.getElementById('decideList').innerHTML =
+          '<div class="empty">没有需要你决定的事项。进度请在下方进度通道查看。</div>';
+      }
+    });
+  });
+
+  document.getElementById('planApprove').addEventListener('click', function () {
+    document.getElementById('planFoot').innerHTML =
+      '<span class="chip ok">已批准 · 13:05</span><span class="note">已授权执行到里程碑 2；偏离计划将重新上报</span>';
+    toast('计划已批准，秘书长 开始派单');
+  });
+  document.getElementById('planEdit').addEventListener('click', function () {
+    toast('原型演示：正式版可在此直接编辑步骤、预算与截止时间');
+  });
+
+  document.querySelectorAll('#escCard [data-esc]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var act = b.getAttribute('data-esc');
+      var msg = act === 'deny' ? '已拒绝。法务部改用本地判例库继续' :
+                act === 'always' ? '已加入白名单并放行' : '已放行本次访问';
+      document.getElementById('escCard').innerHTML =
+        '<div class="esc-body"><span class="chip ok">已处理</span>　' + msg + '（14:43，已记录审计）</div>';
+      var dash1 = document.querySelector('.decide-item[data-decide="1"]');
+      if (dash1) { dash1.remove(); setPending(pending - 1); }
+      toast(msg);
+    });
+  });
+
+  document.querySelectorAll('.progress-toggle').forEach(function (t) {
+    t.addEventListener('click', function () {
+      var list = document.getElementById(t.getAttribute('data-toggle'));
+      var open = list.classList.toggle('open');
+      t.textContent = (open ? '▾ 收起过程记录' : '▸ 展开过程记录（12 条，默认折叠）');
+    });
+  });
+
+  document.querySelectorAll('[data-hire]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var name = b.getAttribute('data-hire');
+      b.disabled = true; b.textContent = '加入中…';
+      setTimeout(function () {
+        b.textContent = '已在组织';
+        b.previousElementSibling && b.parentNode.insertBefore(Object.assign(document.createElement('span'), {className: 'chip ok', textContent: '已加入'}), b);
+        toast('「' + name + '」已加入：实例已创建，正在跑评测集冒烟（试用期）');
+      }, 900);
+    });
+  });
+
+  var eds = document.querySelectorAll('.ed-tabs button');
+  eds.forEach(function (b) {
+    b.addEventListener('click', function () {
+      eds.forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      document.querySelectorAll('.ed-pane').forEach(function (p) { p.classList.remove('on'); });
+      document.getElementById(b.getAttribute('data-pane')).classList.add('on');
+    });
+  });
+
+  function demoSend() {
+    var inp = document.getElementById('chatInput');
+    if (inp.value.trim()) { toast('原型演示：正式版中 秘书长 将分解此任务并生成计划'); inp.value = ''; }
+  }
+  document.getElementById('chatSend').addEventListener('click', demoSend);
+  document.getElementById('chatInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') demoSend(); });
+
+  document.getElementById('orgSwitch').addEventListener('change', function (e) {
+    var v = e.target.value;
+    if (v.indexOf('新建') > -1) {
+      toast('原型演示：从组织模板库新建——尽调团队 / 课题组 / 内容工作室 / 开源维护组 / 个人多助理…');
+      e.target.selectedIndex = 0;
+    } else {
+      toast('原型演示：切换到「' + v + '」将加载该组织的编制与仪表盘');
+    }
+  });
+})();
+</script>

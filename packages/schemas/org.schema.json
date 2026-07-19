@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milo.dev/schemas/org/v1alpha1",
+  "title": "Milo Organization (v0 小组模式子集)",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": { "const": "milo.dev/v1alpha1" },
+    "kind": { "const": "Organization" },
+    "metadata": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" },
+        "version": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "required": ["members"],
+      "additionalProperties": false,
+      "properties": {
+        "members": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "required": ["name", "pack"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" },
+              "pack": {
+                "type": "string",
+                "description": "MiloPack 引用。发布组织模板前必须为 registry 内容寻址 pin；本地开发允许相对路径。"
+              },
+              "runtime": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "mode": { "enum": ["embedded", "container"], "default": "embedded" },
+                  "model_bindings": {
+                    "type": "object",
+                    "propertyNames": { "enum": ["basic", "reasoning", "vision", "code"] },
+                    "additionalProperties": { "type": "string" }
+                  },
+                  "sandbox": { "enum": ["local", "aio", "k8s", "boxlite", "e2b"] }
+                }
+              }
+            }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxParallelMembers": { "type": "integer", "minimum": 1, "maximum": 5, "default": 5 },
+            "pendingQueueBackpressure": { "type": "integer", "minimum": 1, "default": 3 },
+            "taskTokenBudget": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "secretariat": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "制度性参数（可移植）。环境绑定（用什么模型）在 bindings.yaml。",
+          "properties": {
+            "escalation_timeouts": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "mention": { "type": "string", "default": "15m" },
+                "dm": { "type": "string", "default": "1h" }
+              }
+            },
+            "fallback": { "enum": ["pause_branch", "safe_default"], "default": "pause_branch" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,506 @@
+<title>Milo App 原型</title>
+<style>
+  :root {
+    --bg: #E9EBE6;
+    --paper: #F7F8F4;
+    --panel: #FFFFFF;
+    --panel-2: #EEF0EB;
+    --ink: #22282B;
+    --ink-2: #59615D;
+    --ink-3: #8B928D;
+    --line: #E0E2DC;
+    --pine: #3E6B54;
+    --pine-deep: #24382E;
+    --pine-soft: #E3ECE6;
+    --amber: #B07830;
+    --amber-soft: #F4E9D9;
+    --crit: #A8402F;
+    --crit-soft: #F5E2DD;
+    --shadow: 0 1px 4px rgba(30,43,36,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0E120F; --paper: #151A16; --panel: #1D231E; --panel-2: #262C27;
+      --ink: #E3E7E2; --ink-2: #A7B0A9; --ink-3: #79827B; --line: #30372F;
+      --pine: #85B199; --pine-deep: #A8C9B6; --pine-soft: #263429;
+      --amber: #D2A05C; --amber-soft: #3A2F1D;
+      --crit: #D97B66; --crit-soft: #3D241E; --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E120F; --paper: #151A16; --panel: #1D231E; --panel-2: #262C27;
+    --ink: #E3E7E2; --ink-2: #A7B0A9; --ink-3: #79827B; --line: #30372F;
+    --pine: #85B199; --pine-deep: #A8C9B6; --pine-soft: #263429;
+    --amber: #D2A05C; --amber-soft: #3A2F1D;
+    --crit: #D97B66; --crit-soft: #3D241E; --shadow: none;
+  }
+  :root[data-theme="light"] {
+    --bg: #E9EBE6; --paper: #F7F8F4; --panel: #FFFFFF; --panel-2: #EEF0EB;
+    --ink: #22282B; --ink-2: #59615D; --ink-3: #8B928D; --line: #E0E2DC;
+    --pine: #3E6B54; --pine-deep: #24382E; --pine-soft: #E3ECE6;
+    --amber: #B07830; --amber-soft: #F4E9D9;
+    --crit: #A8402F; --crit-soft: #F5E2DD; --shadow: 0 1px 4px rgba(30,43,36,.08);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    font-size: 14px; line-height: 1.6;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  button:focus-visible { outline: 2px solid var(--pine); outline-offset: 2px; }
+
+  /* ---- phone frame ---- */
+  .device {
+    max-width: 400px; margin: 24px auto; background: var(--paper);
+    border-radius: 34px; border: 1px solid var(--line);
+    box-shadow: 0 18px 50px rgba(20,30,24,.18);
+    overflow: hidden; position: relative;
+    display: flex; flex-direction: column; height: min(830px, calc(100vh - 48px));
+  }
+  @media (max-width: 440px) {
+    .device { max-width: none; margin: 0; border-radius: 0; height: 100vh; box-shadow: none; border: none; }
+  }
+  .statusbar {
+    display: flex; justify-content: space-between; padding: 10px 22px 4px;
+    font-size: 12px; font-weight: 600; color: var(--ink-2); flex: none;
+  }
+  .appbar { display: flex; align-items: center; gap: 10px; padding: 8px 18px 10px; flex: none; }
+  .appbar .logo { font-family: "Songti SC", "Noto Serif CJK SC", serif; font-size: 20px; font-weight: 700; }
+  .appbar select {
+    margin-left: auto; background: var(--pine-soft); color: var(--pine); border: none;
+    font-weight: 600; font-size: 12px; padding: 4px 10px; border-radius: 999px; font-family: inherit; max-width: 180px;
+  }
+  .body { flex: 1; overflow-y: auto; padding: 4px 16px 16px; }
+  .tabbar {
+    flex: none; display: flex; border-top: 1px solid var(--line); background: var(--panel);
+    padding: 6px 8px calc(10px + env(safe-area-inset-bottom));
+  }
+  .tabbar button {
+    flex: 1; background: none; border: none; color: var(--ink-3);
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    font-size: 10.5px; padding: 4px 0; position: relative;
+  }
+  .tabbar button .ic { font-size: 20px; line-height: 1.2; }
+  .tabbar button.on { color: var(--pine); font-weight: 700; }
+  .tabbar .bdg {
+    position: absolute; top: 0; right: 24%; background: var(--crit); color: #fff;
+    font-size: 10px; min-width: 16px; height: 16px; line-height: 16px; border-radius: 999px; padding: 0 4px;
+  }
+
+  .page { display: none; }
+  .page.on { display: block; }
+  .h { font-size: 11.5px; letter-spacing: .1em; font-weight: 700; color: var(--ink-3); margin: 16px 4px 8px; }
+  .h:first-child { margin-top: 8px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+
+  .chip { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--panel-2); color: var(--ink-2); }
+  .chip.ok { background: var(--pine-soft); color: var(--pine); font-weight: 600; }
+  .chip.warn { background: var(--amber-soft); color: var(--amber); font-weight: 600; }
+  .btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 9px; padding: 7px 14px; font-size: 13px; }
+  .btn.primary { background: var(--pine); border-color: var(--pine); color: #fff; font-weight: 600; }
+  :root[data-theme="dark"] .btn.primary { color: #10160F; }
+  .btn.crit { color: var(--crit); border-color: var(--crit-soft); }
+  .btn.sm { padding: 5px 12px; font-size: 12px; border-radius: 8px; }
+  .btn[disabled] { opacity: .5; }
+
+  /* ---- chat ---- */
+  .msg { display: flex; gap: 8px; margin: 10px 0; }
+  .msg.me { flex-direction: row-reverse; }
+  .ava { width: 30px; height: 30px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+  .ava.m { background: var(--pine); color: #fff; }
+  :root[data-theme="dark"] .ava.m { color: #10160F; }
+  .ava.u { background: var(--panel-2); color: var(--ink-2); }
+  .bub { max-width: 82%; }
+  .bub .t { font-size: 10.5px; color: var(--ink-3); margin: 0 4px 3px; }
+  .msg.me .bub .t { text-align: right; }
+  .bub .x { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 13px; font-size: 13.5px; box-shadow: var(--shadow); }
+  .msg.me .bub .x { background: var(--pine-soft); border-color: transparent; }
+  .bub p { margin: 0 0 6px; } .bub p:last-child { margin: 0; }
+
+  .plan { border: 1px solid var(--pine); border-radius: 11px; overflow: hidden; margin-top: 8px; }
+  .plan .ph { background: var(--pine-soft); color: var(--pine); font-weight: 700; font-size: 12px; padding: 7px 12px; }
+  .plan ol { margin: 0; padding: 8px 12px 8px 28px; font-size: 12.5px; }
+  .plan li { margin: 4px 0; }
+  .plan li small { display: block; color: var(--ink-3); font-size: 11px; }
+  .plan .pf { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--line); align-items: center; flex-wrap: wrap; }
+
+  .s3 { border-left: 3px solid var(--pine); background: var(--panel-2); border-radius: 8px; padding: 8px 11px; margin-top: 8px; font-size: 12.5px; display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; }
+  .s3 dt { color: var(--ink-3); font-size: 11px; font-weight: 600; } .s3 dd { margin: 0; }
+
+  .esc { border: 1px solid var(--amber); border-radius: 11px; overflow: hidden; margin-top: 8px; }
+  .esc .eh { background: var(--amber-soft); color: var(--amber); font-weight: 700; font-size: 12px; padding: 7px 12px; }
+  .esc .eb { padding: 9px 12px; font-size: 12.5px; }
+  .esc .ef { display: flex; gap: 7px; padding: 8px 12px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+
+  .composer { display: flex; gap: 8px; margin-top: 12px; position: sticky; bottom: 0; background: var(--paper); padding: 8px 0 2px; }
+  .composer input { flex: 1; border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px; font-size: 13.5px; background: var(--panel); color: var(--ink); font-family: inherit; min-width: 0; }
+  .composer input:focus { outline: 2px solid var(--pine); outline-offset: -1px; }
+
+  /* ---- decide ---- */
+  .todo { padding: 12px 14px; margin-bottom: 10px; }
+  .todo .who { font-size: 11px; color: var(--ink-3); }
+  .todo .q { font-weight: 650; font-size: 13.5px; margin: 3px 0; }
+  .todo .why { font-size: 12px; color: var(--ink-2); margin-bottom: 9px; }
+  .todo .acts { display: flex; gap: 7px; flex-wrap: wrap; }
+  .todo.crit { border-left: 4px solid var(--crit); }
+  .todo.warn { border-left: 4px solid var(--amber); }
+  .empty { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 22px; }
+  .feed { padding: 2px 14px; }
+  .fi { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+  .fi:last-child { border-bottom: none; }
+  .fi time { color: var(--ink-3); font-size: 11px; flex: none; width: 36px; }
+  .fi b { color: var(--pine); font-weight: 600; flex: none; }
+  .fi span { color: var(--ink-2); }
+
+  /* ---- org ---- */
+  .tree { display: flex; flex-direction: column; align-items: center; padding: 16px 12px; }
+  .stem { width: 1px; height: 14px; background: var(--line); }
+  .hstem { display: flex; justify-content: center; width: 100%; }
+  .tier { display: flex; gap: 8px; width: 100%; }
+  .node {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 10px; text-align: center; font-size: 12px; flex: 1; min-width: 0;
+  }
+  .node b { display: block; font-size: 12.5px; }
+  .node small { color: var(--ink-2); font-size: 10.5px; display: block; }
+  .node .st { margin-top: 4px; }
+  .node.dept { border-style: dashed; }
+  .node.cond { background: var(--pine-soft); border-color: var(--pine); cursor: pointer; }
+  .node.cond b { color: var(--pine); }
+  .node.owner { background: transparent; border-style: none; }
+  .subtree { border: 1px dashed var(--line); border-radius: 10px; padding: 8px; flex: 1.4; }
+  .subtree .inner { display: flex; gap: 6px; margin-top: 6px; }
+  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+  .dot.busy { background: var(--amber); } .dot.idle { background: var(--pine); } .dot.wait { background: var(--crit); }
+  .limits { font-size: 11px; color: var(--ink-3); text-align: center; padding: 10px 14px; border-top: 1px dashed var(--line); }
+
+  /* ---- market ---- */
+  .pack { padding: 13px 14px; margin-bottom: 10px; }
+  .pack .top { display: flex; align-items: baseline; gap: 7px; }
+  .pack h3 { margin: 0; font-size: 14px; }
+  .pack .ver { font-size: 10.5px; color: var(--ink-3); }
+  .pack .desc { font-size: 12px; color: var(--ink-2); margin: 5px 0 7px; }
+  .qc { display: flex; gap: 9px; align-items: center; background: var(--panel-2); border-radius: 8px; padding: 7px 10px; font-size: 11px; }
+  .qc .sc { font-size: 17px; font-weight: 700; color: var(--pine); }
+  .qc .d { color: var(--ink-2); line-height: 1.4; }
+  .pack .ft { display: flex; align-items: center; gap: 7px; margin-top: 8px; }
+  .pack .au { font-size: 11px; color: var(--ink-3); margin-right: auto; }
+
+  /* ---- bottom sheet ---- */
+  .scrim { position: absolute; inset: 0; background: rgba(20,26,22,.45); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20; }
+  .scrim.on { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 21;
+    background: var(--panel); border-radius: 20px 20px 0 0; padding: 10px 20px 26px;
+    transform: translateY(105%); transition: transform .25s ease; max-height: 78%; overflow-y: auto;
+  }
+  .sheet.on { transform: translateY(0); }
+  @media (prefers-reduced-motion: reduce) { .sheet, .scrim { transition: none; } }
+  .sheet .grip { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 4px auto 14px; }
+  .sheet h3 { margin: 0 0 4px; font-size: 16px; }
+  .sheet .sub { font-size: 12px; color: var(--ink-3); margin-bottom: 12px; }
+  .sheet .duty { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .sheet .duty:last-of-type { border-bottom: none; }
+  .sheet .duty .n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--pine-soft); color: var(--pine); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+  .sheet .duty b { display: block; font-size: 13px; }
+  .sheet .duty small { color: var(--ink-2); font-size: 12px; }
+  .sheet .note { background: var(--amber-soft); color: var(--amber); border-radius: 9px; padding: 9px 12px; font-size: 12px; margin-top: 12px; }
+
+  #toast {
+    position: absolute; bottom: 84px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--pine-deep); color: #EAF0EB; padding: 8px 16px; border-radius: 999px;
+    font-size: 12px; opacity: 0; transition: all .22s ease; z-index: 30; white-space: nowrap; max-width: 88%;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  :root[data-theme="dark"] #toast { background: #2E3D33; color: #E3E7E2; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+
+<div class="device">
+  <div class="statusbar"><span>9:41</span><span>Milo · 原型</span></div>
+  <div class="appbar">
+    <span class="logo">Milo</span>
+    <select id="orgSwitch" aria-label="切换组织">
+      <option>🔬 科研课题组 ai-lab-101</option>
+      <option>🏢 尽调团队 due-diligence</option>
+      <option>✍️ 内容工作室 studio-nova</option>
+      <option>＋ 从模板新建组织…</option>
+    </select>
+  </div>
+
+  <div class="body">
+
+    <!-- ===== 对话 ===== -->
+    <div class="page on" id="pg-chat">
+      <div class="msg me">
+        <div class="ava u">你</div>
+        <div class="bub"><div class="t">09:02</div>
+          <div class="x"><p>调研「扩散模型在蛋白质设计」近三年进展，写一篇综述初稿，下周一前给我。</p></div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="ava m">M</div>
+        <div class="bub"><div class="t">前台 Conductor · 09:03</div>
+          <div class="x">
+            <p>收到。已分解为计划（匹配流水线 paper-pipeline），批准后授权执行到里程碑 2：</p>
+            <div class="plan">
+              <div class="ph">执行计划 · 待批准</div>
+              <ol>
+                <li><b>文献与实验收集</b>（文献检索 ∥ 实验分析，并行）<small>近 3 年顶会/顶刊 + 代表工作复核 · 预算 30 万 token</small></li>
+                <li><b>综述撰写</b>（论文小组，串行承接）<small>依赖①的 artifact · 初稿 → 审校 · 周一 10:00 前交付</small></li>
+              </ol>
+              <div class="pf" id="planFoot">
+                <button class="btn primary sm" id="planOk" type="button">批准</button>
+                <button class="btn sm" type="button" id="planEdit">修改计划</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="ava m">M</div>
+        <div class="bub"><div class="t">前台 Conductor · 11:40 · 里程碑 1 完成</div>
+          <div class="x">
+            <p>文献收集完成（127 篇 → 精选 34 篇）。论文小组已开始撰写：</p>
+            <dl class="s3">
+              <dt>在做什么</dt><dd>按方法谱系组织综述框架，初稿完成 2/6 节</dd>
+              <dt>为什么</dt><dd>①阶段发现三条主要技术路线，按路线分节比按年份更清晰</dd>
+              <dt>置信度/风险</dt><dd>0.86 · 风险：2 篇关键论文无开放全文</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <div class="msg" id="escMsg">
+        <div class="ava m">M</div>
+        <div class="bub"><div class="t">前台 Conductor · 11:52 · 需要你决定</div>
+          <div class="x">
+            <div class="esc" id="escCard">
+              <div class="eh">⚠ 升级：外部数据集下载</div>
+              <div class="eb">实验分析成员请求下载 ProteinBench 数据集（2.3 GB，外部网络）复核基准结果。触发策略 external-side-effect（block）。<br><span style="color:var(--ink-3);">不放行的替代：引用论文报告数值，不做复核（置信度下降）。</span></div>
+              <div class="ef">
+                <button class="btn primary sm" data-esc="ok" type="button">放行</button>
+                <button class="btn crit sm" data-esc="no" type="button">拒绝</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <input type="text" id="chatIn" placeholder="向前台下达任务…" aria-label="向前台下达任务">
+        <button class="btn primary" type="button" id="chatSend">发送</button>
+      </div>
+    </div>
+
+    <!-- ===== 待办 ===== -->
+    <div class="page" id="pg-todo">
+      <div class="h">待你决定（阻塞通道 · 只有需要决策的事项）</div>
+      <div id="todoList">
+        <div class="card todo crit" data-todo="1">
+          <div class="who">实验分析成员 · 任务 t-2a17 · 8 分钟前</div>
+          <div class="q">下载外部数据集 ProteinBench（2.3 GB）</div>
+          <div class="why">external-side-effect（block）：包权限未声明该域名。可逆 · 外部 · 只读下载。</div>
+          <div class="acts">
+            <button class="btn primary sm" data-act="放行，开始下载" type="button">放行</button>
+            <button class="btn sm" data-act="已加入白名单" type="button">加白名单并放行</button>
+            <button class="btn crit sm" data-act="已拒绝，改用论文报告数值" type="button">拒绝</button>
+          </div>
+        </div>
+        <div class="card todo warn" data-todo="2">
+          <div class="who">论文小组 · 任务 t-2a19 · 25 分钟前</div>
+          <div class="q">综述范围二选一：是否纳入 RNA 设计的交叉工作？</div>
+          <div class="why">low-confidence（escalate）：两种范围界定各有 3 篇关键文献支撑，影响综述结构。</div>
+          <div class="acts">
+            <button class="btn primary sm" data-act="已选择：仅蛋白质设计" type="button">仅蛋白质设计</button>
+            <button class="btn sm" data-act="已选择：纳入交叉工作" type="button">纳入交叉工作</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="h">进度通道（拉取式 · 不推送）</div>
+      <div class="card feed">
+        <div class="fi"><time>11:40</time><b>论文小组</b><span>初稿 2/6 节，framework.md 已产出</span></div>
+        <div class="fi"><time>11:12</time><b>文献检索</b><span>交付 lit-review.md（34 篇精选，含引用）</span></div>
+        <div class="fi"><time>10:47</time><b>实验分析</b><span>复核 3 个代表方法的报告指标</span></div>
+        <div class="fi"><time>09:05</time><b>Conductor</b><span>计划已批准，按 paper-pipeline 派单</span></div>
+      </div>
+    </div>
+
+    <!-- ===== 组织 ===== -->
+    <div class="page" id="pg-org">
+      <div class="h">组织架构 · ai-lab-101 科研课题组（点击「前台」看它的角色）</div>
+      <div class="card">
+        <div class="tree">
+          <div class="node owner"><b>你</b><small>组织所有者 · 唯一需要出现的人类</small></div>
+          <div class="stem"></div>
+          <button class="node cond" id="condNode" type="button" style="width:88%;">
+            <b>前台 Conductor ⓘ</b>
+            <small>系统角色 · 不是成员 · 你唯一的对话对象</small>
+          </button>
+          <div class="stem"></div>
+          <div class="tier">
+            <div class="node"><b>文献检索</b><small>lit-scout@2.1<br>DeerFlow 实例</small><div class="st"><span class="dot idle"></span><span class="chip ok">空闲</span></div></div>
+            <div class="node"><b>实验分析</b><small>exp-analyst@1.3<br>DeerFlow 实例</small><div class="st"><span class="dot wait"></span><span class="chip warn">等决定</span></div></div>
+            <div class="subtree">
+              <div class="node dept" style="border:none; background:transparent; padding:2px;"><b>论文小组（部门）</b><small>对上 = 一个虚拟成员 · 内部对上不可见</small></div>
+              <div class="inner">
+                <div class="node"><b>初稿撰写</b><small>writer@1.0</small><div class="st"><span class="dot busy"></span><span class="chip">working</span></div></div>
+                <div class="node"><b>审校</b><small>reviewer@1.1</small><div class="st"><span class="dot idle"></span><span class="chip ok">空闲</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="limits">硬护栏：并行 ≤5 · 部门深度 ≤2 · 成员间无直连，产物经 artifact 交接 · 汇报只上行到 Conductor</div>
+      </div>
+
+      <div class="h">本周健康度</div>
+      <div class="card" style="display:flex; text-align:center; padding:12px 6px;">
+        <div style="flex:1;"><div style="font-size:19px;font-weight:700;">3<small style="font-size:12px;color:var(--ink-3);"> / 5</small></div><div style="font-size:11px;color:var(--ink-2);">并行成员</div></div>
+        <div style="flex:1;"><div style="font-size:19px;font-weight:700;" id="orgPending">2</div><div style="font-size:11px;color:var(--ink-2);">待批队列</div></div>
+        <div style="flex:1;"><div style="font-size:19px;font-weight:700;">1.2</div><div style="font-size:11px;color:var(--ink-2);">打扰/任务</div></div>
+        <div style="flex:1;"><div style="font-size:19px;font-weight:700;color:var(--amber);">18%</div><div style="font-size:11px;color:var(--ink-2);">override 率</div></div>
+      </div>
+    </div>
+
+    <!-- ===== 市场 ===== -->
+    <div class="page" id="pg-market">
+      <div class="h">人才市场 · 带质检报告的 Agent</div>
+      <div class="card pack">
+        <div class="top"><h3>文献检索专家</h3><span class="ver">lit-scout @2.1.0</span></div>
+        <div><span class="chip">literature-search</span> <span class="chip">citation-check</span></div>
+        <p class="desc">多库检索 + 引用核对，输出带引用的文献图谱。</p>
+        <div class="qc"><span class="sc">4.7</span><span class="d">平台复跑 ✓（31 例）· SkillScan ✓<br>权限：学术数据库 4 域名 · 文件只读</span></div>
+        <div class="ft"><span class="au">@scholarly · 2.8k</span><span class="chip ok">已加入</span></div>
+      </div>
+      <div class="card pack">
+        <div class="top"><h3>论文小组（成建制部门）</h3><span class="ver">teams/paper-team @1.1.0</span></div>
+        <div><span class="chip">department</span> <span class="chip">初稿+审校</span></div>
+        <p class="desc">部门包：撰写与审校双成员 + 内部验收流程。接口：outline → draft。</p>
+        <div class="qc"><span class="sc">4.5</span><span class="d">端到端评测 ✓（9 例）<br>导入重绑 model_bindings 与密钥</span></div>
+        <div class="ft"><span class="au">@milo-official · 1.9k</span><span class="chip ok">已加入</span></div>
+      </div>
+      <div class="card pack">
+        <div class="top"><h3>数据可视化成员</h3><span class="ver">viz-artist @0.8.2</span></div>
+        <div><span class="chip">chart-generation</span> <span class="chip">figure-polish</span></div>
+        <p class="desc">论文配图与结果图表生成，符合期刊风格规范。</p>
+        <div class="qc"><span class="sc">4.2</span><span class="d">平台复跑 ✓（14 例）<br>权限：无外部网络 · python_repl（沙箱强制）</span></div>
+        <div class="ft"><span class="au">@plotwise · 640</span><button class="btn primary sm" id="hireBtn" type="button">招募</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabbar">
+    <button class="on" data-pg="chat" type="button"><span class="ic">💬</span>前台</button>
+    <button data-pg="todo" type="button"><span class="ic">✅</span>待办<span class="bdg" id="todoBdg">2</span></button>
+    <button data-pg="org" type="button"><span class="ic">🏛</span>组织</button>
+    <button data-pg="market" type="button"><span class="ic">🛒</span>市场</button>
+  </div>
+
+  <!-- Conductor 角色说明 sheet -->
+  <div class="scrim" id="scrim"></div>
+  <div class="sheet" id="condSheet" role="dialog" aria-label="Conductor 角色说明">
+    <div class="grip"></div>
+    <h3>前台 Conductor 是什么角色？</h3>
+    <div class="sub">不是组织成员，也不是"经理 Agent"——它是 Milo 运行时内置的<b>系统角色</b>，你唯一的对话对象。成员（DeerFlow 实例）对你不可见，都由它对接。</div>
+    <div class="duty"><span class="n">1</span><div><b>听懂并分解任务</b><small>把你的自然语言变成结构化任务信封（目标/输出格式/边界/预算）——这是它唯一使用 LLM 的环节。</small></div></div>
+    <div class="duty"><span class="n">2</span><div><b>确定性路由派单</b><small>按成员的能力声明用 CEL 规则匹配，谁接什么活是代码算出来的，不靠 LLM 猜。</small></div></div>
+    <div class="duty"><span class="n">3</span><div><b>汇报中枢</b><small>把成员汇报归一为"在做什么/为什么/置信度"三槽位；只有需要你决策的事项才打扰你，其余攒进进度通道。</small></div></div>
+    <div class="duty"><span class="n">4</span><div><b>编制调和 + 交付验收</b><small>按 org.yaml 招募/裁撤成员（新成员先跑评测集"试用期"）；校验交付物是否符合 output_spec 再交给你。</small></div></div>
+    <div class="note">为什么不设"经理 Agent"？给 LLM 一个经理人设已被业界证伪（不委派、抢活干、行为漂移）。Conductor 的所有管理动作都是确定性代码，LLM 只负责理解意图。</div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script>
+(function () {
+  var tabs = document.querySelectorAll('.tabbar button');
+  tabs.forEach(function (b) {
+    b.addEventListener('click', function () {
+      tabs.forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('on'); });
+      document.getElementById('pg-' + b.getAttribute('data-pg')).classList.add('on');
+      document.querySelector('.body').scrollTop = 0;
+    });
+  });
+
+  var toastEl = document.getElementById('toast'), tm;
+  function toast(s) {
+    toastEl.textContent = s; toastEl.classList.add('show');
+    clearTimeout(tm); tm = setTimeout(function () { toastEl.classList.remove('show'); }, 2400);
+  }
+
+  var pending = 2;
+  function setPending(n) {
+    pending = n;
+    var b = document.getElementById('todoBdg');
+    b.textContent = n; b.style.display = n ? '' : 'none';
+    var o = document.getElementById('orgPending'); if (o) o.textContent = n;
+  }
+
+  document.querySelectorAll('.todo .acts .btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      b.closest('.todo').remove();
+      setPending(pending - 1);
+      toast(b.getAttribute('data-act') + '（已记录审计）');
+      if (!document.querySelector('#todoList .todo')) {
+        document.getElementById('todoList').innerHTML = '<div class="card empty">没有需要你决定的事项 🎉</div>';
+      }
+      if (b.closest('#todoList') && b.closest('.todo') === null) {}
+    });
+  });
+
+  document.getElementById('planOk').addEventListener('click', function () {
+    document.getElementById('planFoot').innerHTML = '<span class="chip ok">已批准 · 09:05</span><span style="font-size:11px;color:var(--ink-3);">已授权到里程碑 2，偏离将重新上报</span>';
+    toast('计划已批准，Conductor 开始派单');
+  });
+  document.getElementById('planEdit').addEventListener('click', function () { toast('原型演示：正式版可编辑步骤/预算/截止时间'); });
+
+  document.querySelectorAll('#escCard [data-esc]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var ok = b.getAttribute('data-esc') === 'ok';
+      document.getElementById('escCard').innerHTML =
+        '<div class="eb"><span class="chip ok">已处理</span>　' + (ok ? '已放行，实验分析成员开始下载' : '已拒绝，改用论文报告数值') + '（11:54，已记录审计）</div>';
+      var t = document.querySelector('.todo[data-todo="1"]');
+      if (t) { t.remove(); setPending(pending - 1); }
+      toast(ok ? '已放行' : '已拒绝');
+    });
+  });
+
+  var scrim = document.getElementById('scrim'), sheet = document.getElementById('condSheet');
+  function openSheet() { scrim.classList.add('on'); sheet.classList.add('on'); }
+  function closeSheet() { scrim.classList.remove('on'); sheet.classList.remove('on'); }
+  document.getElementById('condNode').addEventListener('click', openSheet);
+  scrim.addEventListener('click', closeSheet);
+
+  document.getElementById('hireBtn').addEventListener('click', function () {
+    var b = document.getElementById('hireBtn');
+    b.disabled = true; b.textContent = '加入中…';
+    setTimeout(function () {
+      b.outerHTML = '<span class="chip ok">已加入</span>';
+      toast('「数据可视化成员」已加入：正在跑评测集冒烟（试用期）');
+    }, 900);
+  });
+
+  function send() {
+    var i = document.getElementById('chatIn');
+    if (i.value.trim()) { toast('原型演示：Conductor 将分解此任务并生成计划'); i.value = ''; }
+  }
+  document.getElementById('chatSend').addEventListener('click', send);
+  document.getElementById('chatIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
+
+  document.getElementById('orgSwitch').addEventListener('change', function (e) {
+    if (e.target.value.indexOf('新建') > -1) {
+      toast('原型演示：从组织模板库新建组织');
+      e.target.selectedIndex = 0;
+    } else {
+      toast('原型演示：切换到 ' + e.target.value.replace(/^[^\s]+\s/, ''));
+    }
+  });
+})();
+</script>

@@ -1,0 +1,935 @@
+<title>Milo 桌面端原型</title>
+<style>
+  :root {
+    --bg: #DFE2DB;
+    --paper: #F6F7F3;
+    --panel: #FFFFFF;
+    --panel-2: #EDEFEA;
+    --ink: #22282B;
+    --ink-2: #59615D;
+    --ink-3: #8B928D;
+    --line: #DEE1DA;
+    --pine: #3E6B54;
+    --pine-deep: #24382E;
+    --pine-soft: #E3ECE6;
+    --amber: #B07830;
+    --amber-soft: #F4E9D9;
+    --crit: #A8402F;
+    --crit-soft: #F5E2DD;
+    --side-bg: #1E2B24;
+    --side-ink: #C6D2CA;
+    --side-hl: #33453B;
+    --shadow: 0 1px 3px rgba(30,43,36,.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0B0E0C; --paper: #151A16; --panel: #1C221D; --panel-2: #252B26;
+      --ink: #E3E7E2; --ink-2: #A7B0A9; --ink-3: #79827B; --line: #30372F;
+      --pine: #85B199; --pine-deep: #A8C9B6; --pine-soft: #263429;
+      --amber: #D2A05C; --amber-soft: #3A2F1D;
+      --crit: #D97B66; --crit-soft: #3D241E;
+      --side-bg: #10160F; --side-ink: #A9B5AC; --side-hl: #26302A; --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0B0E0C; --paper: #151A16; --panel: #1C221D; --panel-2: #252B26;
+    --ink: #E3E7E2; --ink-2: #A7B0A9; --ink-3: #79827B; --line: #30372F;
+    --pine: #85B199; --pine-deep: #A8C9B6; --pine-soft: #263429;
+    --amber: #D2A05C; --amber-soft: #3A2F1D;
+    --crit: #D97B66; --crit-soft: #3D241E;
+    --side-bg: #10160F; --side-ink: #A9B5AC; --side-hl: #26302A; --shadow: none;
+  }
+  :root[data-theme="light"] {
+    --bg: #DFE2DB; --paper: #F6F7F3; --panel: #FFFFFF; --panel-2: #EDEFEA;
+    --ink: #22282B; --ink-2: #59615D; --ink-3: #8B928D; --line: #DEE1DA;
+    --pine: #3E6B54; --pine-deep: #24382E; --pine-soft: #E3ECE6;
+    --amber: #B07830; --amber-soft: #F4E9D9;
+    --crit: #A8402F; --crit-soft: #F5E2DD;
+    --side-bg: #1E2B24; --side-ink: #C6D2CA; --side-hl: #33453B;
+    --shadow: 0 1px 3px rgba(30,43,36,.07);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    font-size: 13.5px; line-height: 1.6; padding: 22px;
+  }
+  .mono, code, kbd { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  button { font-family: inherit; cursor: pointer; }
+  button:focus-visible { outline: 2px solid var(--pine); outline-offset: 2px; }
+  kbd { background: var(--panel-2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; font-size: 11px; padding: 0 5px; color: var(--ink-2); }
+
+  /* ================= window ================= */
+  .window {
+    max-width: 1280px; margin: 0 auto; background: var(--paper);
+    border-radius: 12px; overflow: hidden; border: 1px solid var(--line);
+    box-shadow: 0 24px 70px rgba(15,25,18,.28);
+    display: flex; flex-direction: column; height: calc(100vh - 44px); min-height: 620px;
+    position: relative;
+  }
+  @media (max-width: 900px) { body { padding: 0; } .window { border-radius: 0; height: 100vh; } }
+  .chrome {
+    display: flex; align-items: center; gap: 14px; padding: 10px 16px;
+    background: var(--panel); border-bottom: 1px solid var(--line); flex: none;
+  }
+  .lights { display: flex; gap: 8px; flex: none; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #F26D5F; } .lights i:nth-child(2) { background: #F2BE4C; } .lights i:nth-child(3) { background: #58C25F; }
+  .chrome .title { font-weight: 600; font-size: 13px; color: var(--ink-2); }
+  .chrome select {
+    background: var(--pine-soft); color: var(--pine); border: none; font-weight: 600;
+    font-size: 12px; padding: 4px 10px; border-radius: 999px; font-family: inherit;
+  }
+  .searchbox {
+    margin-left: auto; display: flex; align-items: center; gap: 8px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px;
+    padding: 5px 12px; font-size: 12.5px; color: var(--ink-3); cursor: pointer; min-width: 220px;
+  }
+  .searchbox:hover { border-color: var(--ink-3); }
+
+  .frame { flex: 1; display: flex; min-height: 0; }
+
+  /* ---- sidebar ---- */
+  .side {
+    width: 190px; flex: none; background: var(--side-bg); color: var(--side-ink);
+    display: flex; flex-direction: column; padding: 14px 10px;
+  }
+  .side .brand { font-family: "Songti SC", "Noto Serif CJK SC", serif; font-size: 19px; font-weight: 700; color: #fff; padding: 0 10px 12px; }
+  :root[data-theme="dark"] .side .brand { color: #E3E7E2; }
+  .side button.nv {
+    display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none;
+    color: var(--side-ink); padding: 8px 10px; border-radius: 7px; font-size: 13px; text-align: left;
+  }
+  .side button.nv:hover { background: var(--side-hl); }
+  .side button.nv.on { background: var(--side-hl); color: #fff; font-weight: 600; }
+  :root[data-theme="dark"] .side button.nv.on { color: #E9EDE8; }
+  .side .bdg { margin-left: auto; background: var(--crit); color: #fff; border-radius: 999px; font-size: 10.5px; padding: 0 7px; line-height: 17px; }
+  .side .sp { flex: 1; }
+  .side .foot { font-size: 10.5px; opacity: .55; padding: 8px 10px; line-height: 1.6; }
+  .grpsec { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 14px; border-top: 1px solid var(--side-hl); padding-top: 12px; }
+  .grplabel { font-size: 10.5px; letter-spacing: .12em; font-weight: 700; opacity: .6; padding: 0 10px 6px; }
+  .gsearch { margin: 0 4px 8px; border: 1px solid var(--side-hl); background: rgba(255,255,255,.06); color: var(--side-ink); border-radius: 7px; padding: 5px 10px; font-size: 12px; font-family: inherit; }
+  .gsearch::placeholder { color: var(--side-ink); opacity: .5; }
+  .gsearch:focus { outline: 2px solid var(--pine); outline-offset: -1px; }
+  .glist { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+  .gitem { display: flex; align-items: center; gap: 7px; background: none; border: none; color: var(--side-ink); padding: 7px 10px; border-radius: 7px; font-size: 12px; text-align: left; width: 100%; }
+  .gitem:hover { background: var(--side-hl); }
+  .gitem .gdot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.25); flex: none; }
+  .gitem .gdot.busy { background: var(--amber); }
+  .gitem .gt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gitem .gbdg { background: var(--crit); color: #fff; font-size: 9.5px; border-radius: 999px; padding: 0 6px; line-height: 15px; flex: none; }
+  .gitem.archived { opacity: .55; }
+  .setrow { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .setrow:last-child { border-bottom: none; }
+  .setrow small { color: var(--ink-3); font-size: 11.5px; }
+  .setrow .end { margin-left: auto; flex: none; }
+  .setsel { border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 12.5px; background: var(--panel); color: var(--ink); font-family: inherit; max-width: 230px; }
+  .tgl { position: relative; width: 34px; height: 20px; flex: none; margin-left: auto; }
+  .tgl input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .tgl input[disabled] { cursor: not-allowed; }
+  .tgl i { display: block; position: absolute; inset: 0; background: var(--line); border-radius: 999px; pointer-events: none; }
+  .tgl i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+  @media (prefers-reduced-motion: reduce) { .tgl i::after { transition: none; } }
+  .tgl input:checked + i { background: var(--pine); }
+  .tgl input:checked + i::after { left: 16px; }
+  .tgl input[disabled] + i { opacity: .45; }
+  .tgl input:focus-visible + i { outline: 2px solid var(--pine); outline-offset: 2px; }
+  .gitem.on { background: var(--side-hl); color: #fff; font-weight: 600; }
+  :root[data-theme="dark"] .gitem.on { color: #E9EDE8; }
+  .gchead { display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 16px; max-width: 720px; }
+  .gchead b { font-size: 15px; }
+  .gcsub { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+  .gchead .chip { margin-left: auto; flex: none; }
+  .gcmsgs { max-width: 720px; }
+  .wlcomposer.gc { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; max-width: 720px; margin-top: 14px; background: var(--panel); }
+
+  /* ---- main + inspector ---- */
+  .main { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 24px 30px; }
+  .inspector {
+    width: 300px; flex: none; border-left: 1px solid var(--line); background: var(--panel);
+    overflow-y: auto; padding: 18px 18px 28px; display: none;
+  }
+  .inspector.on { display: block; }
+  @media (max-width: 1080px) { .inspector { display: none !important; } }
+  .inspector h4 { margin: 0 0 2px; font-size: 14px; }
+  .inspector .sub { font-size: 11.5px; color: var(--ink-3); margin-bottom: 14px; }
+  .ikv { display: grid; grid-template-columns: max-content 1fr; gap: 5px 12px; font-size: 12.5px; margin: 10px 0; }
+  .ikv dt { color: var(--ink-3); } .ikv dd { margin: 0; word-break: break-all; }
+  .ihead { font-size: 11px; letter-spacing: .09em; font-weight: 700; color: var(--ink-3); margin: 18px 0 8px; }
+  .ihead:first-of-type { margin-top: 0; }
+  .bar { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; margin: 6px 0 2px; }
+  .bar i { display: block; height: 100%; background: var(--pine); border-radius: 3px; }
+  .afile { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+  .afile:last-child { border-bottom: none; }
+  .afile .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .afile small { color: var(--ink-3); }
+
+  .screen { display: none; } .screen.on { display: block; }
+  .h { font-size: 11.5px; letter-spacing: .09em; font-weight: 700; color: var(--ink-3); margin: 20px 0 10px; }
+  .h:first-child { margin-top: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  .chip { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--panel-2); color: var(--ink-2); }
+  .chip.ok { background: var(--pine-soft); color: var(--pine); font-weight: 600; }
+  .chip.warn { background: var(--amber-soft); color: var(--amber); font-weight: 600; }
+  .btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 7px; padding: 6px 13px; font-size: 12.5px; }
+  .btn:hover { border-color: var(--ink-3); }
+  .btn.primary { background: var(--pine); border-color: var(--pine); color: #fff; font-weight: 600; }
+  :root[data-theme="dark"] .btn.primary { color: #10160F; }
+  .btn.crit { color: var(--crit); border-color: var(--crit-soft); }
+  .btn.sm { padding: 4px 11px; font-size: 12px; }
+  .btn[disabled] { opacity: .5; cursor: default; }
+
+  /* ---- chat ---- */
+  .chat { max-width: 680px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { display: flex; gap: 10px; }
+  .ava { width: 30px; height: 30px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+  .ava.m { background: var(--pine); color: #fff; } :root[data-theme="dark"] .ava.m { color: #10160F; }
+  .ava.u { background: var(--panel-2); color: var(--ink-2); }
+  .bub { flex: 1; min-width: 0; }
+  .bub .t { font-size: 11px; color: var(--ink-3); margin-bottom: 3px; }
+  .bub .x { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 11px 15px; box-shadow: var(--shadow); }
+  .msg.me .x { background: var(--panel-2); }
+  .bub p { margin: 0 0 7px; } .bub p:last-child { margin: 0; }
+
+  .plan { border: 1px solid var(--pine); border-radius: 9px; overflow: hidden; margin-top: 8px; }
+  .plan .ph { background: var(--pine-soft); color: var(--pine); font-weight: 700; font-size: 12px; padding: 7px 13px; }
+  .plan ol { margin: 0; padding: 9px 13px 9px 30px; font-size: 12.5px; }
+  .plan li { margin: 4px 0; } .plan li small { display: block; color: var(--ink-3); font-size: 11.5px; }
+  .plan .pf { display: flex; gap: 8px; padding: 8px 13px; border-top: 1px solid var(--line); align-items: center; flex-wrap: wrap; }
+  .plan .note { font-size: 11.5px; color: var(--ink-3); margin-left: auto; }
+
+  .s3 { border-left: 3px solid var(--pine); background: var(--panel-2); border-radius: 7px; padding: 9px 12px; margin-top: 8px; font-size: 12.5px; display: grid; grid-template-columns: max-content 1fr; gap: 2px 11px; }
+  .s3 dt { color: var(--ink-3); font-size: 11.5px; font-weight: 600; } .s3 dd { margin: 0; }
+
+  .esc { border: 1px solid var(--amber); border-radius: 9px; overflow: hidden; margin-top: 8px; }
+  .esc .eh { background: var(--amber-soft); color: var(--amber); font-weight: 700; font-size: 12px; padding: 7px 13px; }
+  .esc .eb { padding: 10px 13px; font-size: 12.5px; }
+  .esc .ef { display: flex; gap: 8px; padding: 8px 13px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+
+  .composer { display: flex; gap: 10px; margin-top: 18px; max-width: 680px; }
+  .composer input { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; font-size: 13.5px; background: var(--panel); color: var(--ink); font-family: inherit; min-width: 0; }
+  .composer input:focus { outline: 2px solid var(--pine); outline-offset: -1px; }
+
+  /* ---- todo ---- */
+  .todo { padding: 13px 16px; margin-bottom: 10px; }
+  .todo .who { font-size: 11.5px; color: var(--ink-3); }
+  .todo .q { font-weight: 650; margin: 3px 0; }
+  .todo .why { font-size: 12.5px; color: var(--ink-2); margin-bottom: 9px; max-width: 60em; }
+  .todo .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .todo.crit { border-left: 4px solid var(--crit); }
+  .todo.warn { border-left: 4px solid var(--amber); }
+  .todo[data-task] { cursor: pointer; }
+  .todo[data-task]:hover { border-color: var(--pine); }
+  .todo .who { display: flex; gap: 8px; align-items: baseline; }
+  .todo .ghint { margin-left: auto; flex: none; font-size: 11px; color: var(--pine); }
+  .gacts { display: flex; gap: 7px; margin-top: 8px; flex-wrap: wrap; }
+  .empty { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 24px; }
+  .feed { padding: 4px 16px; }
+  .fi { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+  .fi:last-child { border-bottom: none; }
+  .fi time { color: var(--ink-3); font-size: 11.5px; flex: none; width: 40px; }
+  .fi b { color: var(--pine); font-weight: 600; flex: none; }
+  .fi span { color: var(--ink-2); }
+
+  /* ---- org ---- */
+  .tree { display: flex; flex-direction: column; align-items: center; padding: 20px 16px; }
+  .stem { width: 1px; height: 15px; background: var(--line); }
+  .tier { display: flex; gap: 10px; width: 100%; }
+  .node {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
+    padding: 8px 11px; text-align: center; font-size: 12px; flex: 1; min-width: 0; cursor: pointer;
+  }
+  .node:hover { border-color: var(--pine); }
+  .node.sel { outline: 2px solid var(--pine); outline-offset: -1px; }
+  .node b { display: block; font-size: 12.5px; }
+  .node small { color: var(--ink-2); font-size: 10.5px; display: block; }
+  .node .st { margin-top: 4px; }
+  .node.cond { background: var(--pine-soft); border-color: var(--pine); }
+  .node.cond b { color: var(--pine); }
+  .node.owner { background: transparent; border: none; cursor: default; }
+  .subtree { border: 1px dashed var(--line); border-radius: 10px; padding: 8px; flex: 1.5; cursor: pointer; }
+  .subtree:hover { border-color: var(--pine); }
+  .subtree.sel { outline: 2px solid var(--pine); outline-offset: -1px; }
+  .subtree .inner { display: flex; gap: 7px; margin-top: 6px; }
+  .subtree .inner .node { cursor: default; }
+  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+  .dot.busy { background: var(--amber); } .dot.idle { background: var(--pine); } .dot.wait { background: var(--crit); }
+  .limits { font-size: 11.5px; color: var(--ink-3); text-align: center; padding: 10px 16px; border-top: 1px dashed var(--line); }
+
+  /* ---- market ---- */
+  .packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+  .pack { padding: 14px 16px; cursor: pointer; }
+  .pack:hover { border-color: var(--pine); }
+  .pack.sel { outline: 2px solid var(--pine); outline-offset: -1px; }
+  .pack .top { display: flex; align-items: baseline; gap: 7px; }
+  .pack h3 { margin: 0; font-size: 14px; }
+  .pack .ver { font-size: 10.5px; color: var(--ink-3); }
+  .pack .desc { font-size: 12px; color: var(--ink-2); margin: 5px 0 8px; }
+  .qc { display: flex; gap: 9px; align-items: center; background: var(--panel-2); border-radius: 7px; padding: 7px 10px; font-size: 11px; }
+  .qc .sc { font-size: 17px; font-weight: 700; color: var(--pine); }
+  .qc .d { color: var(--ink-2); line-height: 1.4; }
+  .pack .ft { display: flex; align-items: center; gap: 7px; margin-top: 8px; }
+  .pack .au { font-size: 11px; color: var(--ink-3); margin-right: auto; }
+
+  /* ---- statusbar ---- */
+  .statusbar {
+    flex: none; display: flex; gap: 18px; align-items: center;
+    border-top: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; font-size: 11.5px; color: var(--ink-3);
+  }
+  .statusbar .ok { color: var(--pine); }
+  .statusbar .right { margin-left: auto; display: flex; gap: 14px; }
+
+  /* ---- native notification ---- */
+  .notif {
+    position: absolute; top: 52px; right: 18px; z-index: 40; width: 320px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 10px 34px rgba(15,25,18,.25); padding: 12px 14px;
+    transform: translateX(360px); transition: transform .3s ease; cursor: pointer;
+  }
+  .notif.show { transform: translateX(0); }
+  @media (prefers-reduced-motion: reduce) { .notif { transition: none; } }
+  .notif .nt { display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--ink-3); margin-bottom: 4px; }
+  .notif .nb { font-size: 12.5px; }
+  .notif .nb b { display: block; }
+
+  /* ---- command palette ---- */
+  .scrim { position: absolute; inset: 0; background: rgba(18,24,20,.4); z-index: 50; display: none; }
+  .scrim.on { display: block; }
+  .palette {
+    position: absolute; top: 90px; left: 50%; transform: translateX(-50%); z-index: 51;
+    width: min(560px, 92%); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; box-shadow: 0 18px 60px rgba(15,25,18,.35); overflow: hidden; display: none;
+  }
+  .palette.on { display: block; }
+  .palette input {
+    width: 100%; border: none; border-bottom: 1px solid var(--line); background: transparent;
+    color: var(--ink); padding: 13px 18px; font-size: 14.5px; font-family: inherit;
+  }
+  .palette input:focus { outline: none; }
+  .palette .list { max-height: 320px; overflow-y: auto; padding: 6px; }
+  .palette .cmd {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: none; border: none; color: var(--ink); padding: 9px 12px; border-radius: 7px; font-size: 13px;
+  }
+  .palette .cmd:hover, .palette .cmd.hl { background: var(--pine-soft); }
+  .palette .cmd .k { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+
+  /* ---- worklog (chat-style trace) ---- */
+  .wlwrap { position: absolute; inset: 0; z-index: 45; display: none; }
+  .wlwrap.on { display: block; }
+  .wlscrim { position: absolute; inset: 0; background: rgba(18,24,20,.4); }
+  .wlpanel {
+    position: absolute; top: 36px; bottom: 36px; left: 50%; transform: translateX(-50%);
+    width: min(640px, 94%); background: var(--paper); border: 1px solid var(--line);
+    border-radius: 14px; box-shadow: 0 18px 60px rgba(15,25,18,.35);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .wlhead { display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .wlhead b { font-size: 13.5px; }
+  .wlhead small { color: var(--ink-3); font-size: 11.5px; }
+  .wlhead .x { margin-left: auto; }
+  .wlbody { flex: 1; overflow-y: auto; padding: 16px 18px; }
+  .wlmsg { display: flex; gap: 9px; margin-bottom: 12px; }
+  .wlav { width: 26px; height: 26px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; background: var(--panel-2); color: var(--ink-2); }
+  .wlav.s { background: var(--pine); color: #fff; }
+  :root[data-theme="dark"] .wlav.s { color: #10160F; }
+  .wlb { flex: 1; min-width: 0; }
+  .wlh { font-size: 11px; color: var(--ink-3); margin-bottom: 3px; }
+  .wtag { display: inline-block; font-size: 10px; font-weight: 700; padding: 0 6px; border-radius: 4px; background: var(--pine-soft); color: var(--pine); margin-left: 5px; }
+  .wtag.up { background: var(--amber-soft); color: var(--amber); }
+  .wlx { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; font-size: 12.5px; }
+  .wlx small { color: var(--ink-3); display: block; margin-top: 3px; font-size: 11px; }
+  .wlsys { text-align: center; font-size: 11px; color: var(--ink-3); margin: 10px 0; }
+  .gcmsgs .wlav { cursor: pointer; }
+  .gcmsgs .wlav:hover { outline: 2px solid var(--pine); outline-offset: 1px; }
+  .wlfoot { border-top: 1px dashed var(--line); padding: 8px 18px; font-size: 11px; color: var(--ink-3); background: var(--panel); }
+  .wlcomposer { display: flex; gap: 8px; padding: 10px 18px 4px; border-top: 1px solid var(--line); background: var(--panel); }
+  .wlcomposer input { flex: 1; border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font-size: 12.5px; background: var(--paper); color: var(--ink); font-family: inherit; min-width: 0; }
+  .wlcomposer input:focus { outline: 2px solid var(--pine); outline-offset: -1px; }
+  .wlav.o { background: var(--amber-soft); color: var(--amber); }
+
+  #toast {
+    position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%) translateY(16px);
+    background: var(--pine-deep); color: #EAF0EB; padding: 8px 18px; border-radius: 999px;
+    font-size: 12.5px; opacity: 0; transition: all .22s ease; z-index: 60; max-width: 80%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  :root[data-theme="dark"] #toast { background: #2E3D33; color: #E3E7E2; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+
+<div class="window">
+  <div class="chrome">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <span class="title" id="winTitle">Milo — ai-lab-101</span>
+    <select id="orgSwitch" aria-label="切换组织">
+      <option>🔬 科研课题组 ai-lab-101</option>
+      <option>🏢 尽调团队 due-diligence</option>
+      <option>✍️ 内容工作室 studio-nova</option>
+      <option>＋ 从模板新建组织…</option>
+    </select>
+    <div class="searchbox" id="searchBox" role="button" tabindex="0" aria-label="打开命令面板">
+      <span>🔍</span><span>搜索或执行命令…</span><span style="margin-left:auto;"><kbd>⌘K</kbd></span>
+    </div>
+  </div>
+
+  <div class="frame">
+    <aside class="side">
+      <div class="brand">Milo</div>
+      <button class="nv on" data-s="chat" type="button">💬 秘书长</button>
+      <button class="nv" data-s="todo" type="button">✅ 待办<span class="bdg" id="todoBdg">2</span></button>
+      <button class="nv" data-s="org" type="button">🏛 组织</button>
+      <button class="nv" data-s="market" type="button">🛒 市场</button>
+      <button class="nv" data-s="editor" type="button">🗂 编制</button>
+      <button class="nv" data-s="settings" type="button">⚙️ 设置</button>
+      <div class="grpsec">
+        <div class="grplabel">任务群</div>
+        <input class="gsearch" id="gSearch" type="text" placeholder="搜索任务群…" aria-label="搜索任务群">
+        <div class="glist" id="gList">
+          <button class="gitem" data-g="t-2a10" type="button"><span class="gdot busy"></span><span class="gt">t-2a10 综述任务</span><span class="gbdg">@你</span></button>
+          <button class="gitem" data-g="t-2a17" type="button"><span class="gdot busy"></span><span class="gt">t-2a17 数据集复核</span></button>
+          <button class="gitem archived" data-g="t-1f88" type="button"><span class="gdot"></span><span class="gt">t-1f88 文献工具调研</span></button>
+          <button class="gitem archived" data-g="t-1e02" type="button"><span class="gdot"></span><span class="gt">t-1e02 期刊格式整理</span></button>
+        </div>
+      </div>
+      <div class="foot">桌面端原型 v0.2<br>灰点 = 已归档（审计可查）</div>
+    </aside>
+
+    <main class="main">
+
+      <!-- ===== 前台 ===== -->
+      <section class="screen on" id="s-chat">
+        <div class="chat">
+          <div class="msg me"><div class="ava u">你</div><div class="bub"><div class="t">09:02</div>
+            <div class="x"><p>调研「扩散模型在蛋白质设计」近三年进展，写一篇综述初稿，下周一前给我。</p></div></div></div>
+
+          <div class="msg"><div class="ava m">M</div><div class="bub"><div class="t">秘书长 · 09:03</div>
+            <div class="x">
+              <p>收到。已分解为计划（匹配流水线 paper-pipeline），批准后授权执行到里程碑 2：</p>
+              <div class="plan">
+                <div class="ph">执行计划 · 待批准</div>
+                <ol>
+                  <li><b>文献与实验收集</b>（文献检索 ∥ 实验分析，并行）<small>近 3 年顶会/顶刊 + 代表工作复核 · 预算 30 万 token</small></li>
+                  <li><b>综述撰写</b>（撰写成员，串行承接）<small>依赖①的 artifact · 初稿 → 审校 · 周一 10:00 前交付</small></li>
+                </ol>
+                <div class="pf" id="planFoot">
+                  <button class="btn primary sm" id="planOk" type="button">批准执行</button>
+                  <button class="btn sm" id="planEdit" type="button">修改计划</button>
+                  <span class="note">强串行段已按拓扑自适应改为单成员承接</span>
+                </div>
+              </div>
+            </div></div></div>
+
+          <div class="msg"><div class="ava m">M</div><div class="bub"><div class="t">秘书长 · 11:40 · 里程碑 1 完成</div>
+            <div class="x">
+              <p>文献收集完成（127 篇 → 精选 34 篇）。撰写成员已开始撰写：</p>
+              <dl class="s3">
+                <dt>在做什么</dt><dd>按方法谱系组织综述框架，初稿完成 2/6 节</dd>
+                <dt>为什么</dt><dd>①阶段发现三条主要技术路线，按路线分节比按年份更清晰</dd>
+                <dt>置信度/风险</dt><dd>0.86 · 风险：2 篇关键论文无开放全文</dd>
+              </dl>
+            </div></div></div>
+
+          <div class="msg"><div class="ava m">M</div><div class="bub"><div class="t">秘书长 · 11:52 · 需要你决定</div>
+            <div class="x">
+              <div class="esc" id="escCard">
+                <div class="eh">⚠ 升级：外部数据集下载</div>
+                <div class="eb">实验分析成员请求下载 ProteinBench 数据集（2.3 GB，外部网络）复核基准结果。触发策略 external-side-effect（block）。<br><span style="color:var(--ink-3);">不放行的替代：引用论文报告数值，不做复核（置信度下降）。</span></div>
+                <div class="ef">
+                  <button class="btn primary sm" data-esc="ok" type="button">放行</button>
+                  <button class="btn sm" data-esc="wl" type="button">加白名单并放行</button>
+                  <button class="btn crit sm" data-esc="no" type="button">拒绝</button>
+                </div>
+              </div>
+            </div></div></div>
+        </div>
+        <div class="composer">
+          <input type="text" id="chatIn" placeholder="向秘书长下达任务…（⌘K 打开命令面板）" aria-label="向秘书长下达任务">
+          <button class="btn primary" id="chatSend" type="button">发送</button>
+        </div>
+      </section>
+
+      <!-- ===== 任务群（中间栏会话） ===== -->
+      <section class="screen" id="s-group">
+        <div class="gchead">
+          <div><b>任务群 · t-2a10 综述任务</b><div class="gcsub">你 + 秘书长 + 3 名组员（文献检索 · 实验分析 · 撰写）· 默认免打扰，@你 才通知</div></div>
+          <span class="chip warn">1 项 @你</span>
+        </div>
+        <div class="gcmsgs" id="gcMsgs">
+          <div class="wlsys">09:05 · 组长批准计划，授权至里程碑 2</div>
+          <div class="wlmsg"><span class="wlav s">秘</span><div class="wlb"><div class="wlh">秘书长 → 文献检索 · 09:05<span class="wtag">派单</span></div><div class="wlx">任务信封：检索近 3 年「扩散模型 × 蛋白质设计」文献，输出带引用的精选清单<small>预算 15 万 token · 截止 12:00 · 边界：仅公开文献库</small></div></div></div>
+          <div class="wlmsg"><span class="wlav s">秘</span><div class="wlb"><div class="wlh">秘书长 → 实验分析 · 09:05<span class="wtag">派单</span></div><div class="wlx">复核 3 个代表方法的基准指标，与论文报告数值对照<small>预算 8 万 token · 无前置依赖</small></div></div></div>
+          <div class="wlmsg"><span class="wlav">文</span><div class="wlb"><div class="wlh">文献检索 → 秘书长 · 10:20<span class="wtag">汇报</span></div><div class="wlx">在做：初筛 127 → 60 篇｜为何：顶会/顶刊优先｜置信 0.90，无风险</div></div></div>
+          <div class="wlmsg"><span class="wlav">文</span><div class="wlb"><div class="wlh">文献检索 → 秘书长 · 11:12<span class="wtag">交付</span></div><div class="wlx">📄 lit-review.md（34 篇精选，含引用）<small>秘书长验收 ✓ 符合 output_spec（引用完整性通过）</small></div></div></div>
+          <div class="wlmsg"><span class="wlav s">秘</span><div class="wlb"><div class="wlh">秘书长 → 撰写 · 11:15<span class="wtag">派单</span></div><div class="wlx">基于 artifact: lit-review.md 撰写综述框架与初稿<small>产物按引用传递，不经消息转述 · 截止周一 10:00</small></div></div></div>
+          <div class="wlmsg"><span class="wlav">撰</span><div class="wlb"><div class="wlh">撰写 → 秘书长 · 11:40<span class="wtag">汇报</span></div><div class="wlx">在做：框架完成，初稿 2/6 节｜为何：按技术路线分节更清晰｜置信 0.86 · 风险：2 篇关键论文无开放全文</div></div></div>
+          <div class="wlmsg"><span class="wlav">实</span><div class="wlb"><div class="wlh">实验分析 → 秘书长 · 11:50<span class="wtag up">升级</span></div><div class="wlx">请求下载外部数据集 ProteinBench（2.3 GB）<small>触发 external-side-effect（block）→ 已转呈组长</small></div></div></div>
+          <div class="wlmsg" id="gAsk"><span class="wlav s">秘</span><div class="wlb"><div class="wlh">秘书长 · 11:52<span class="wtag up">@你 请示</span></div><div class="wlx">@组长 外部数据集下载需要你拍板。<small>15 分钟未回复将私聊提醒；1 小时未回复将按预授权策略暂停该分支（其余任务不受影响）</small><div class="gacts"><button class="btn primary sm" data-gd="ok" type="button">放行</button><button class="btn sm" data-gd="wl" type="button">加白名单并放行</button><button class="btn crit sm" data-gd="no" type="button">拒绝</button></div></div></div></div>
+        </div>
+        <div class="wlcomposer gc">
+          <input type="text" id="wlIn" placeholder="在群里发言（对秘书长下指令，可 @组员）…" aria-label="任务群发言">
+          <button class="btn primary sm" id="wlSend" type="button">发送</button>
+        </div>
+        <p class="proto-note">群规：你的指令（含 @组员）统一经秘书长落为任务信封修订并同步——单一事实源；组员侧仍是点对点信封、互相无直连，群是给人看的视图；任务终结群归档为审计记录。</p>
+      </section>
+
+      <!-- ===== 待办 ===== -->
+      <section class="screen" id="s-todo">
+        <div class="h">待你决定 · 阻塞通道（也会以系统通知推送）</div>
+        <div id="todoList">
+          <div class="card todo crit" data-todo="1" data-task="t-2a10">
+            <div class="who"><span>任务群 t-2a10 综述任务 · 实验分析成员 · 8 分钟前</span><span class="ghint">点击进入任务群处理 →</span></div>
+            <div class="q">下载外部数据集 ProteinBench（2.3 GB）</div>
+            <div class="why">external-side-effect（block）：包权限未声明该域名。四维判定：可逆 · 外部 · 只读 · 低成本。</div>
+            <div class="acts">
+              <button class="btn primary sm" data-gd="ok" type="button">放行</button>
+              <button class="btn sm" data-gd="wl" type="button">加白名单并放行</button>
+              <button class="btn crit sm" data-gd="no" type="button">拒绝</button>
+            </div>
+          </div>
+          <div class="card todo warn" data-todo="2" data-task="t-2a10">
+            <div class="who"><span>任务群 t-2a10 综述任务 · 撰写成员 · 25 分钟前</span><span class="ghint">点击进入任务群处理 →</span></div>
+            <div class="q">综述范围二选一：是否纳入 RNA 设计的交叉工作？</div>
+            <div class="why">low-confidence（escalate）：两种范围界定各有 3 篇关键文献支撑，影响综述结构。</div>
+            <div class="acts">
+              <button class="btn primary sm" data-act="已选择：仅蛋白质设计" type="button">仅蛋白质设计</button>
+              <button class="btn sm" data-act="已选择：纳入交叉工作" type="button">纳入交叉工作</button>
+            </div>
+          </div>
+        </div>
+        <div class="h">进度通道 · 拉取式（不推送）</div>
+        <div class="card feed">
+          <div class="fi"><time>11:40</time><b>撰写成员</b><span>初稿 2/6 节，framework.md 已产出</span></div>
+          <div class="fi"><time>11:12</time><b>文献检索</b><span>交付 lit-review.md（34 篇精选，含引用）</span></div>
+          <div class="fi"><time>10:47</time><b>实验分析</b><span>复核 3 个代表方法的报告指标</span></div>
+          <div class="fi"><time>09:05</time><b>秘书长</b><span>计划已批准，按 paper-pipeline 派单</span></div>
+        </div>
+      </section>
+
+      <!-- ===== 组织 ===== -->
+      <section class="screen" id="s-org">
+        <div class="h">组织架构 · ai-lab-101（点击节点在右侧查看详情）</div>
+        <div class="card">
+          <div class="tree">
+            <div class="node owner"><b>你</b><small>组织所有者 · 唯一的人类</small></div>
+            <div class="stem"></div>
+            <div class="node cond" data-insp="cond" style="max-width: 70%;" tabindex="0" role="button"><b>秘书长</b><small>系统角色 ≈ 办公室主任 · 你唯一的对话对象</small></div>
+            <div class="stem"></div>
+            <div class="tier">
+              <div class="node" data-insp="lit" tabindex="0" role="button"><b>文献检索</b><small>lit-scout@2.1</small><div class="st"><span class="dot idle"></span><span class="chip ok">空闲</span></div></div>
+              <div class="node" data-insp="exp" tabindex="0" role="button"><b>实验分析</b><small>exp-analyst@1.3</small><div class="st"><span class="dot wait"></span><span class="chip warn">等决定</span></div></div>
+              <div class="node" data-insp="writer" tabindex="0" role="button"><b>撰写</b><small>writer@1.0</small><div class="st"><span class="dot busy"></span><span class="chip">working</span></div></div>
+              <div class="node" data-insp="reviewer" tabindex="0" role="button"><b>审校</b><small>reviewer@1.1</small><div class="st"><span class="dot idle"></span><span class="chip ok">空闲</span></div></div>
+            </div>
+          </div>
+          <div class="limits">小组模式（MVP）：单层编制，你是组长 · 并行 ≤5 · 组员间无直连，产物经 artifact 交接 · 汇报只上行到 秘书长（部门/主管为后续版本）</div>
+        </div>
+        <div class="h">本周健康度</div>
+        <div class="card" style="display:flex; text-align:center; padding:13px 8px; max-width:560px;">
+          <div style="flex:1;"><div style="font-size:20px;font-weight:700;">3<small style="font-size:12px;color:var(--ink-3);"> / 5</small></div><div style="font-size:11.5px;color:var(--ink-2);">并行成员</div></div>
+          <div style="flex:1;"><div style="font-size:20px;font-weight:700;" id="orgPending">2</div><div style="font-size:11.5px;color:var(--ink-2);">待批队列</div></div>
+          <div style="flex:1;"><div style="font-size:20px;font-weight:700;">1.2</div><div style="font-size:11.5px;color:var(--ink-2);">打扰/任务</div></div>
+          <div style="flex:1;"><div style="font-size:20px;font-weight:700;color:var(--amber);">18%</div><div style="font-size:11.5px;color:var(--ink-2);">override 率</div></div>
+        </div>
+      </section>
+
+      <!-- ===== 市场 ===== -->
+      <section class="screen" id="s-market">
+        <div class="h">人才市场 · 带质检报告的 Agent（点击卡片在右侧查看详情）</div>
+        <div class="packs">
+          <div class="card pack" data-insp="p-lit">
+            <div class="top"><h3>文献检索专家</h3><span class="ver">lit-scout @2.1.0</span></div>
+            <div><span class="chip">literature-search</span> <span class="chip">citation-check</span></div>
+            <p class="desc">多库检索 + 引用核对，输出带引用的文献图谱。</p>
+            <div class="qc"><span class="sc">4.7</span><span class="d">平台复跑 ✓（31 例）· SkillScan ✓</span></div>
+            <div class="ft"><span class="au">@scholarly · 2.8k</span><span class="chip ok">已加入</span></div>
+          </div>
+          <div class="card pack" data-insp="p-team">
+            <div class="top"><h3>论文部门包</h3><span class="ver">teams/paper-team @1.1.0</span></div>
+            <div><span class="chip">department</span> <span class="chip warn">V2 规划</span></div>
+            <p class="desc">成建制部门：撰写与审校双成员 + 内部验收流程。当前小组模式（MVP）暂不支持部门。</p>
+            <div class="qc"><span class="sc">4.5</span><span class="d">端到端评测 ✓（9 例）</span></div>
+            <div class="ft"><span class="au">@milo-official · 1.9k</span><span class="chip">V2 后可导入</span></div>
+          </div>
+          <div class="card pack" data-insp="p-viz">
+            <div class="top"><h3>数据可视化成员</h3><span class="ver">viz-artist @0.8.2</span></div>
+            <div><span class="chip">chart-generation</span> <span class="chip">figure-polish</span></div>
+            <p class="desc">论文配图与结果图表生成，符合期刊风格规范。</p>
+            <div class="qc"><span class="sc">4.2</span><span class="d">平台复跑 ✓（14 例）</span></div>
+            <div class="ft"><span class="au">@plotwise · 640</span><button class="btn primary sm" id="hireBtn" type="button">招募</button></div>
+          </div>
+          <div class="card pack" data-insp="p-org">
+            <div class="top"><h3>科研课题组（组织模板）</h3><span class="ver">orgs/ai-research-lab @1.0.0</span></div>
+            <div><span class="chip">organization-template</span> <span class="chip">3 成员 + 1 流水线</span></div>
+            <p class="desc">导入即得一个可运行的课题组：三名成员 + paper-pipeline + 升级策略。</p>
+            <div class="qc"><span class="sc">4.4</span><span class="d">端到端评测 ✓（8 例）</span></div>
+            <div class="ft"><span class="au">@milo-official · 1.6k</span><button class="btn sm" type="button" id="tplBtn">导入模板</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 编制 ===== -->
+      <section class="screen" id="s-editor">
+        <div class="h">编制编辑器（桌面端完整版见 Web Console 原型；此处为占位入口）</div>
+        <div class="card" style="padding: 18px 20px; max-width: 640px;">
+          <p style="margin:0 0 10px;">三视图：只读组织图 · 表单编辑（CEL 条件构建器）· org.yaml 文件模式（git 可 diff）。</p>
+          <p style="margin:0; color:var(--ink-2); font-size:12.5px;">桌面端优势：org.yaml 直接关联本地文件系统与 git 仓库，保存即 commit；lint 结果显示在编辑器行内。</p>
+        </div>
+      </section>
+      <!-- ===== 设置 ===== -->
+      <section class="screen" id="s-settings">
+        <div class="h">应用层 · 模型供应商（providers.yaml · 密钥存系统钥匙串，文件只存引用名）</div>
+        <div class="card" style="padding: 4px 18px; max-width: 640px;">
+          <div class="setrow"><div><b>DeepSeek</b><br><small class="mono">api.deepseek.com · 🔑 deepseek-main（钥匙串 ✓）</small></div><span class="chip ok end">reasoning · basic</span><button class="btn sm" data-ping="DeepSeek" type="button">测试连通</button></div>
+          <div class="setrow"><div><b>火山方舟 · 豆包</b><br><small class="mono">ark.cn-beijing.volces.com · 🔑 volc-team（钥匙串 ✓）</small></div><span class="chip ok end">basic · vision</span><button class="btn sm" data-ping="火山方舟" type="button">测试连通</button></div>
+          <div class="setrow"><button class="btn sm" id="addProv" type="button">＋ 添加供应商</button></div>
+        </div>
+
+        <div class="h">组织层 · 环境绑定（bindings.yaml · ai-lab-101，不随组织模板分发）</div>
+        <div class="card" style="padding: 4px 18px; max-width: 640px;">
+          <div class="setrow"><div>档位 reasoning<br><small>秘书长任务分解也使用此档</small></div><select class="setsel end" aria-label="reasoning 档绑定"><option>deepseek-r1（DeepSeek）</option><option>doubao-pro-256k（火山）</option></select></div>
+          <div class="setrow"><div>档位 basic</div><select class="setsel end" aria-label="basic 档绑定"><option>doubao-pro（火山）</option><option>deepseek-v3（DeepSeek）</option></select></div>
+          <div class="setrow"><div>档位 vision</div><span class="chip warn end">未绑定 · 含视觉能力的成员将无法加入</span></div>
+          <div class="setrow"><div>沙箱默认</div><select class="setsel end" aria-label="沙箱默认"><option>AIO 容器（推荐）</option><option>本地（弱隔离，lint 会警告高危组合）</option><option>K8s</option></select></div>
+          <div class="setrow"><small>换绑将滚动重启受影响成员，需你确认后由秘书长调和执行</small><button class="btn primary sm end" id="applyBind" type="button">应用变更</button></div>
+        </div>
+
+        <div class="h">应用层 · 通知（app.yaml）</div>
+        <div class="card" style="padding: 4px 18px; max-width: 640px;">
+          <div class="setrow"><div>@你 请示 → 系统通知<br><small>阻塞通道，建议保持开启</small></div><label class="tgl"><input type="checkbox" checked aria-label="请示系统通知"><i></i></label></div>
+          <div class="setrow"><div>超时私聊提醒（15 分钟未处理）</div><label class="tgl"><input type="checkbox" checked aria-label="超时私聊提醒"><i></i></label></div>
+          <div class="setrow"><div>交付完成通知</div><label class="tgl"><input type="checkbox" aria-label="交付完成通知"><i></i></label></div>
+          <div class="setrow"><div>群消息通知<br><small>进度通道恒为免打扰——这是制度，不可开启</small></div><label class="tgl"><input type="checkbox" disabled aria-label="群消息通知（制度禁用）"><i></i></label></div>
+          <div class="setrow"><div>匿名遥测</div><label class="tgl"><input type="checkbox" aria-label="匿名遥测"><i></i></label></div>
+        </div>
+
+        <div class="h">应用层 · Registry 源（registries.yaml）</div>
+        <div class="card" style="padding: 4px 18px; max-width: 640px;">
+          <div class="setrow"><div><b>registry.milo.dev</b><br><small>官方源 · 同步于 2 分钟前</small></div><span class="chip ok end">默认</span></div>
+          <div class="setrow"><div>私有 Registry</div><span class="chip end">V2 后支持</span></div>
+        </div>
+        <p class="proto-note">文件是事实源：本页操作即编辑 ~/.milo/settings/{app,providers,registries}.yaml 与 ~/.milo/orgs/ai-lab-101/bindings.yaml（git 可管理）。org.yaml 在「编制」页；成员生效配置（渲染产物，只读）在「组织」页成员详情查看。密钥零落盘。</p>
+      </section>
+    </main>
+
+    <!-- ===== inspector ===== -->
+    <aside class="inspector" id="inspector" aria-label="详情面板"></aside>
+  </div>
+
+  <div class="statusbar">
+    <span class="ok">● 已连接</span>
+    <span>3 成员运行中</span>
+    <span>任务 t-2a10 · 里程碑 1/2</span>
+    <div class="right">
+      <span>本月 token 4.2M / 10M</span>
+      <span>Registry 同步于 2 分钟前</span>
+    </div>
+  </div>
+
+  <!-- 系统通知 -->
+  <div class="notif" id="notif" role="alert">
+    <div class="nt"><span>🦌</span><span>Milo · 秘书长私聊 · 现在</span></div>
+    <div class="nb"><b>群里 @你 的事项 15 分钟未处理</b>外部数据集下载待你拍板（任务群 t-2a10）。点击处理。</div>
+  </div>
+
+  <!-- 命令面板 -->
+  <div class="scrim" id="scrim"></div>
+  <div class="palette" id="palette" role="dialog" aria-label="命令面板">
+    <input type="text" id="palIn" placeholder="输入命令或搜索… 如：批准 / 招募 / 切换组织" aria-label="命令输入">
+    <div class="list" id="palList"></div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script>
+(function () {
+  /* ---------- navigation ---------- */
+  var navs = document.querySelectorAll('.side .nv');
+  function go(key) {
+    navs.forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-s') === key); });
+    document.querySelectorAll('#gList .gitem').forEach(function (x) { x.classList.remove('on'); });
+    document.getElementById('winTitle').textContent = 'Milo — ai-lab-101';
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('on'); });
+    document.getElementById('s-' + key).classList.add('on');
+    document.querySelector('.main').scrollTop = 0;
+    setInspector(key === 'chat' ? 'task' : (key === 'org' ? 'cond' : null));
+  }
+  navs.forEach(function (b) { b.addEventListener('click', function () { go(b.getAttribute('data-s')); }); });
+
+  /* ---------- toast ---------- */
+  var toastEl = document.getElementById('toast'), tm;
+  function toast(s) {
+    toastEl.textContent = s; toastEl.classList.add('show');
+    clearTimeout(tm); tm = setTimeout(function () { toastEl.classList.remove('show'); }, 2400);
+  }
+
+  /* ---------- inspector ---------- */
+  var INSP = {
+    task: '<h4>当前任务 t-2a10</h4><div class="sub">扩散模型 × 蛋白质设计 · 综述初稿</div>'
+      + '<div class="ihead">流水线 paper-pipeline</div>'
+      + '<div style="font-size:12.5px;">① 收集（并行）<span class="chip ok">完成</span><br>② 撰写（撰写成员）<span class="chip warn">进行中</span></div>'
+      + '<div class="ihead">预算</div><div style="font-size:12px;color:var(--ink-2);">token 18.7 万 / 30 万</div><div class="bar"><i style="width:62%"></i></div>'
+      + '<div class="ihead">Artifacts</div>'
+      + '<div class="afile"><span>📄</span><span class="nm">lit-review.md</span><small>11:12</small></div>'
+      + '<div class="afile"><span>📄</span><span class="nm">bench-check.md</span><small>10:47</small></div>'
+      + '<div class="afile"><span>📄</span><span class="nm">framework.md</span><small>11:40</small></div>'
+      + '<div class="ihead">交付要求</div><div style="font-size:12px;color:var(--ink-2);">review-draft.md · 含引用 · 周一 10:00 前</div>'
+      + '<div class="ihead">任务群</div><button class="btn sm" onclick="window._wl()">👥 打开任务群（你 + 秘书长 + 组员）</button>',
+    cond: '<h4>秘书长</h4><div class="sub">系统角色 ≈ 办公室主任 / 幕僚长 · 非成员</div>'
+      + '<div class="ihead">职责六项</div>'
+      + '<div style="font-size:12.5px;line-height:1.8;">① 听懂任务 → 结构化任务信封（唯一用 LLM 的环节）<br>② 派单：按能力匹配，无人能接回问你<br>③ 跟进汇总：三槽位归一，细节留档可下钻<br>④ 挡驾与请示：只把需要你拍板的事呈上来<br>⑤ 人事执行（无决定权）：只执行你的招募/请离决定，试用不合格上报你，最多提建议<br>⑥ 验收交付：按要求校验后才放到你桌上</div>'
+      + '<div class="ihead">它不是什么</div>'
+      + '<div style="font-size:12px;color:var(--ink-2);">不是经理——没有自己的方向盘，权力全部来自你的授权（批准计划 = 授权到里程碑）；不是组员——不干具体的活。除①外全部是照章执行的确定性代码："制度长了手脚"，没有"主张"这个功能。</div>',
+    lit: '<h4>文献检索成员</h4><div class="sub">lit-scout@2.1.0 · @scholarly · 官方 Registry</div>'
+      + '<div class="ihead">档案（来自 MiloPack）</div>'
+      + '<dl class="ikv"><dt>能力</dt><dd>literature-search · citation-check</dd><dt>权限</dt><dd>学术库 4 域名 · 文件只读 · 无 REPL</dd><dt>模型要求</dt><dd>reasoning 档 · ≥128k</dd></dl>'
+      + '<div class="ihead">绩效</div>'
+      + '<dl class="ikv"><dt>质检分</dt><dd>4.7（31 例复跑 ✓）</dd><dt>试用</dt><dd>通过（加入冒烟 8/8）</dd><dt>交付退回率</dt><dd>0%（本月 3 次交付）</dd></dl>'
+      + '<div class="ihead">实例</div>'
+      + '<dl class="ikv"><dt>形态</dt><dd>容器 · AIO 沙箱</dd><dt>模型绑定</dt><dd>reasoning → deepseek-r1</dd><dt>本月用量</dt><dd>82 万 token</dd><dt>状态</dt><dd><span class="chip ok">空闲</span></dd></dl>'
+      + '<div class="ihead">最近交付</div><div class="afile"><span>📄</span><span class="nm">lit-review.md</span><small>今天 · 验收 ✓</small></div>'
+      + '<div class="ihead">操作</div><button class="btn sm" onclick="window._t(\'只读查看渲染产物：deerflow-config.yaml + SOUL.md（原型演示）\')">查看生效配置</button> <button class="btn sm" onclick="window._t(\'原型演示：暂停成员\')">暂停</button> <button class="btn sm crit" onclick="window._t(\'请离将生成确认请求——人事只能由组长操纵（原型演示）\')">请离</button>',
+    exp: '<h4>实验分析成员</h4><div class="sub">exp-analyst@1.3.0 · @quantfox · 官方 Registry</div>'
+      + '<div class="ihead">档案（来自 MiloPack）</div>'
+      + '<dl class="ikv"><dt>能力</dt><dd>benchmark-check · repro-analysis</dd><dt>权限</dt><dd>无外部网络 · python_repl（沙箱强制）</dd><dt>模型要求</dt><dd>reasoning 档</dd></dl>'
+      + '<div class="ihead">绩效</div>'
+      + '<dl class="ikv"><dt>质检分</dt><dd>4.4（19 例复跑 ✓）</dd><dt>试用</dt><dd>通过（6/6）</dd><dt>交付退回率</dt><dd>—（本月首单进行中）</dd></dl>'
+      + '<div class="ihead">实例</div>'
+      + '<dl class="ikv"><dt>形态</dt><dd>容器 · AIO 沙箱</dd><dt>本月用量</dt><dd>31 万 token</dd><dt>状态</dt><dd><span class="chip warn">等你决定（数据集下载）</span></dd></dl>'
+      + '<div class="ihead">待决事项</div><div style="font-size:12px;color:var(--ink-2);">下载 ProteinBench 2.3 GB —— 点待办或任务群处理</div>'
+      + '<div class="ihead">操作</div><button class="btn sm" onclick="window._t(\'只读查看渲染产物：deerflow-config.yaml + SOUL.md（原型演示）\')">查看生效配置</button> <button class="btn sm" onclick="window._t(\'原型演示：暂停成员\')">暂停</button> <button class="btn sm crit" onclick="window._t(\'请离将生成确认请求——人事只能由组长操纵（原型演示）\')">请离</button>',
+    writer: '<h4>撰写成员</h4><div class="sub">writer@1.0.0 · @papercraft · 官方 Registry</div>'
+      + '<div class="ihead">档案（来自 MiloPack）</div>'
+      + '<dl class="ikv"><dt>能力</dt><dd>review-writing · citation-format</dd><dt>权限</dt><dd>无外部网络 · 文件读写限工作区</dd><dt>模型要求</dt><dd>reasoning 档</dd></dl>'
+      + '<div class="ihead">绩效</div>'
+      + '<dl class="ikv"><dt>质检分</dt><dd>4.5（22 例复跑 ✓）</dd><dt>试用</dt><dd>通过（7/7）</dd><dt>交付退回率</dt><dd>12%（上月 1/8 被退回）</dd></dl>'
+      + '<div class="ihead">实例</div>'
+      + '<dl class="ikv"><dt>形态</dt><dd>容器 · AIO 沙箱</dd><dt>模型绑定</dt><dd>reasoning → deepseek-r1</dd><dt>本月用量</dt><dd>54 万 token</dd><dt>状态</dt><dd><span class="chip">working · 初稿 2/6 节</span></dd></dl>'
+      + '<div class="ihead">当前产出</div><div class="afile"><span>📄</span><span class="nm">framework.md</span><small>11:40</small></div>'
+      + '<div class="ihead">操作</div><button class="btn sm" onclick="window._t(\'只读查看渲染产物：deerflow-config.yaml + SOUL.md（原型演示）\')">查看生效配置</button> <button class="btn sm" onclick="window._t(\'原型演示：暂停成员\')">暂停</button> <button class="btn sm crit" onclick="window._t(\'请离将生成确认请求——人事只能由组长操纵（原型演示）\')">请离</button>',
+    reviewer: '<h4>审校成员</h4><div class="sub">reviewer@1.1.0 · @papercraft · 官方 Registry</div>'
+      + '<div class="ihead">档案（来自 MiloPack）</div>'
+      + '<dl class="ikv"><dt>能力</dt><dd>proofreading · fact-check</dd><dt>权限</dt><dd>无外部网络 · 文件只读</dd><dt>模型要求</dt><dd>basic 档</dd></dl>'
+      + '<div class="ihead">绩效</div>'
+      + '<dl class="ikv"><dt>质检分</dt><dd>4.6（17 例复跑 ✓）</dd><dt>试用</dt><dd>通过（5/5）</dd><dt>交付退回率</dt><dd>0%</dd></dl>'
+      + '<div class="ihead">实例</div>'
+      + '<dl class="ikv"><dt>形态</dt><dd>容器 · AIO 沙箱</dd><dt>模型绑定</dt><dd>basic → doubao-pro</dd><dt>状态</dt><dd><span class="chip ok">空闲 · 等撰写交稿</span></dd></dl>'
+      + '<div class="ihead">操作</div><button class="btn sm" onclick="window._t(\'只读查看渲染产物：deerflow-config.yaml + SOUL.md（原型演示）\')">查看生效配置</button> <button class="btn sm" onclick="window._t(\'原型演示：暂停成员\')">暂停</button> <button class="btn sm crit" onclick="window._t(\'请离将生成确认请求——人事只能由组长操纵（原型演示）\')">请离</button>',
+    'p-lit': '<h4>文献检索专家</h4><div class="sub">lit-scout @2.1.0 · @scholarly</div><dl class="ikv"><dt>质检</dt><dd>4.7 · 31 例复跑 ✓</dd><dt>权限</dt><dd>学术库 4 域名 · 只读</dd><dt>模型要求</dt><dd>reasoning 档 · ≥128k</dd><dt>评测集</dt><dd>含引用准确率专项</dd></dl>',
+    'p-team': '<h4>论文部门包</h4><div class="sub">teams/paper-team @1.1.0 · V2 规划</div><dl class="ikv"><dt>形态</dt><dd>成建制部门包（撰写+审校+内部验收）</dd><dt>接口</dt><dd>outline → draft</dd><dt>质检</dt><dd>4.5 · 端到端 9 例</dd><dt>状态</dt><dd>小组模式（MVP）暂不支持部门，V2 后可导入</dd></dl>',
+    'p-viz': '<h4>数据可视化成员</h4><div class="sub">viz-artist @0.8.2 · @plotwise</div><dl class="ikv"><dt>质检</dt><dd>4.2 · 14 例复跑 ✓</dd><dt>权限</dt><dd>无外部网络 · python_repl 沙箱强制</dd><dt>依赖</dt><dd>无 MCP 依赖</dd></dl>',
+    'p-org': '<h4>科研课题组模板</h4><div class="sub">orgs/ai-research-lab @1.0.0</div><dl class="ikv"><dt>内容</dt><dd>3 成员 + paper-pipeline + 升级策略</dd><dt>质检</dt><dd>4.4 · 端到端 8 例</dd><dt>导入</dt><dd>org.yaml 全引用已 pin；重绑模型与密钥</dd></dl>'
+  };
+  window._t = toast;
+  var inspEl = document.getElementById('inspector');
+  function setInspector(key) {
+    if (key && INSP[key]) { inspEl.innerHTML = INSP[key]; inspEl.classList.add('on'); }
+    else { inspEl.classList.remove('on'); }
+  }
+  document.querySelectorAll('[data-insp]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      document.querySelectorAll('.node.sel, .subtree.sel, .pack.sel').forEach(function (x) { x.classList.remove('sel'); });
+      el.classList.add('sel');
+      setInspector(el.getAttribute('data-insp'));
+    });
+  });
+  setInspector('task');
+
+  /* ---------- todo ---------- */
+  var pending = 2;
+  function setPending(n) {
+    pending = n;
+    var b = document.getElementById('todoBdg');
+    b.textContent = n; b.style.display = n ? '' : 'none';
+    var o = document.getElementById('orgPending'); if (o) o.textContent = n;
+  }
+  function checkTodoEmpty() {
+    if (!document.querySelector('#todoList .todo')) {
+      document.getElementById('todoList').innerHTML = '<div class="card empty">没有需要你决定的事项</div>';
+    }
+  }
+  function resolveDataset(mode) {
+    var msg = mode === 'no' ? '已拒绝，改用论文报告数值' : (mode === 'wl' ? '已加入白名单并放行' : '已放行，实验分析继续复核');
+    var ga = document.getElementById('gAsk');
+    if (ga) {
+      var x = ga.querySelector('.gacts');
+      if (x) {
+        x.outerHTML = '<div style="margin-top:8px;"><span class="chip ok">已处理</span> <span style="font-size:11px;color:var(--ink-3);">' + msg + '（已记录审计）</span></div>';
+        document.getElementById('gcMsgs').insertAdjacentHTML('beforeend', '<div class="wlsys">11:54 · 组长已处理请示：' + msg + '</div>');
+      }
+    }
+    var ec = document.getElementById('escCard');
+    if (ec && !ec.getAttribute('data-done')) {
+      ec.setAttribute('data-done', '1');
+      ec.innerHTML = '<div class="eb"><span class="chip ok">已处理</span>　' + msg + '（11:54，已记录审计）</div>';
+    }
+    var t = document.querySelector('.todo[data-todo="1"]');
+    if (t) { t.remove(); setPending(pending - 1); checkTodoEmpty(); }
+    toast(msg);
+  }
+  document.querySelectorAll('.todo .acts .btn').forEach(function (b) {
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var gd = b.getAttribute('data-gd');
+      if (gd) { resolveDataset(gd); return; }
+      b.closest('.todo').remove();
+      setPending(pending - 1);
+      toast(b.getAttribute('data-act') + '（已记录审计）');
+      checkTodoEmpty();
+    });
+  });
+  document.querySelectorAll('.todo[data-task]').forEach(function (t) {
+    t.addEventListener('click', function () { openGroup(t.getAttribute('data-task')); });
+  });
+  document.querySelectorAll('#gAsk [data-gd]').forEach(function (b) {
+    b.addEventListener('click', function () { resolveDataset(b.getAttribute('data-gd')); });
+  });
+
+  /* ---------- chat ---------- */
+  document.getElementById('planOk').addEventListener('click', function () {
+    document.getElementById('planFoot').innerHTML = '<span class="chip ok">已批准 · 09:05</span><span class="note">已授权到里程碑 2，偏离将重新上报</span>';
+    toast('计划已批准，秘书长 开始派单');
+  });
+  document.getElementById('planEdit').addEventListener('click', function () { toast('原型演示：可编辑步骤 / 预算 / 截止时间'); });
+  document.querySelectorAll('#escCard [data-esc]').forEach(function (b) {
+    b.addEventListener('click', function () { resolveDataset(b.getAttribute('data-esc')); });
+  });
+  function send() {
+    var i = document.getElementById('chatIn');
+    if (i.value.trim()) { toast('原型演示：秘书长 将分解此任务并生成计划'); i.value = ''; }
+  }
+  document.getElementById('chatSend').addEventListener('click', send);
+  document.getElementById('chatIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
+
+  /* ---------- market ---------- */
+  document.getElementById('hireBtn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    var b = e.target; b.disabled = true; b.textContent = '加入中…';
+    setTimeout(function () { b.outerHTML = '<span class="chip ok">已加入</span>'; toast('「数据可视化成员」已加入：评测集冒烟中（试用期）'); }, 900);
+  });
+  document.getElementById('tplBtn').addEventListener('click', function (e) {
+    e.stopPropagation(); toast('原型演示：导入组织模板 → 重绑模型与密钥 → 一键部署');
+  });
+
+  /* ---------- settings ---------- */
+  document.querySelectorAll('#s-settings .tgl input:not([disabled])').forEach(function (t) {
+    t.addEventListener('change', function () { toast('已写入 app.yaml（原型演示）'); });
+  });
+  document.querySelectorAll('#s-settings .setsel').forEach(function (s) {
+    s.addEventListener('change', function () { toast('绑定变更已暂存，点「应用变更」后生效'); });
+  });
+  document.querySelectorAll('[data-ping]').forEach(function (b) {
+    b.addEventListener('click', function () { toast(b.getAttribute('data-ping') + ' 连通性 ✓ 延迟 230ms（原型演示）'); });
+  });
+  document.getElementById('addProv').addEventListener('click', function () { toast('原型演示：添加供应商 → 密钥将直接存入系统钥匙串，不落文件'); });
+  document.getElementById('applyBind').addEventListener('click', function () { toast('2 名成员需滚动重启——已生成确认请求，确认后由秘书长调和执行（原型演示）'); });
+
+  /* ---------- org switch ---------- */
+  document.getElementById('orgSwitch').addEventListener('change', function (e) {
+    if (e.target.value.indexOf('新建') > -1) { toast('原型演示：从组织模板库新建组织'); e.target.selectedIndex = 0; }
+    else { toast('原型演示：切换到 ' + e.target.value.replace(/^\S+\s/, '')); }
+  });
+
+  /* ---------- native notification demo ---------- */
+  var notif = document.getElementById('notif');
+  setTimeout(function () { notif.classList.add('show'); }, 2200);
+  setTimeout(function () { notif.classList.remove('show'); }, 10000);
+  notif.addEventListener('click', function () { notif.classList.remove('show'); openGroup('t-2a10'); });
+
+  /* ---------- task group screen (middle column) ---------- */
+  function openGroup(id) {
+    navs.forEach(function (x) { x.classList.remove('on'); });
+    document.querySelectorAll('#gList .gitem').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-g') === id); });
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('on'); });
+    document.getElementById('s-group').classList.add('on');
+    document.getElementById('winTitle').textContent = 'Milo — 任务群 t-2a10 综述任务';
+    setInspector('task');
+    var m = document.querySelector('.main'); m.scrollTop = m.scrollHeight;
+  }
+  window._wl = function () { openGroup('t-2a10'); };
+  function wlSend() {
+    var i = document.getElementById('wlIn'), v = i.value.trim();
+    if (!v) return;
+    var body = document.getElementById('gcMsgs');
+    body.insertAdjacentHTML('beforeend',
+      '<div class="wlmsg"><span class="wlav o">长</span><div class="wlb"><div class="wlh">组长（你）· 现在</div><div class="wlx">' + v.replace(/</g, '&lt;') + '</div></div></div>');
+    i.value = '';
+    var m = document.querySelector('.main');
+    m.scrollTop = m.scrollHeight;
+    setTimeout(function () {
+      body.insertAdjacentHTML('beforeend',
+        '<div class="wlmsg"><span class="wlav s">秘</span><div class="wlb"><div class="wlh">秘书长 · 现在<span class="wtag">确认</span></div><div class="wlx">收到。已落为任务信封修订并同步相关组员（原型演示）。</div></div></div>');
+      m.scrollTop = m.scrollHeight;
+    }, 600);
+  }
+  document.getElementById('wlSend').addEventListener('click', wlSend);
+  document.getElementById('wlIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') wlSend(); });
+
+  /* ---------- avatar → member profile ---------- */
+  var AVMAP = { '文': 'lit', '实': 'exp', '撰': 'writer', '审': 'reviewer', '秘': 'cond' };
+  document.getElementById('gcMsgs').addEventListener('click', function (e) {
+    var av = e.target.closest('.wlav');
+    if (!av) return;
+    var k = AVMAP[av.textContent.trim()];
+    if (k) { setInspector(k); toast('右侧已显示「' + av.textContent.trim() + '」的档案'); }
+  });
+
+  /* ---------- task group list (sidebar) ---------- */
+  document.getElementById('gSearch').addEventListener('input', function (e) {
+    var q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('#gList .gitem').forEach(function (g) {
+      g.style.display = g.textContent.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+    });
+  });
+  document.querySelectorAll('#gList .gitem').forEach(function (g) {
+    g.addEventListener('click', function () {
+      if (g.getAttribute('data-g') === 't-2a10') { window._wl(); }
+      else if (g.classList.contains('archived')) { toast('原型演示：打开已归档任务群 ' + g.getAttribute('data-g') + '（只读审计记录）'); }
+      else { toast('原型演示：打开任务群 ' + g.getAttribute('data-g')); }
+    });
+  });
+
+  /* ---------- command palette ---------- */
+  var CMDS = [
+    { t: '⚠ 批准：外部数据集下载（进入任务群 t-2a10 处理）', k: '待办', run: function () { openGroup('t-2a10'); } },
+    { t: '👥 打开任务群：t-2a10 综述任务', k: '', run: function () { window._wl(); } },
+    { t: '💬 跳转到前台对话', k: 'G 1', run: function () { go('chat'); } },
+    { t: '🏛 查看组织架构', k: 'G 3', run: function () { go('org'); } },
+    { t: '🛒 招募新成员（打开市场）', k: 'G 4', run: function () { go('market'); } },
+    { t: '🗂 编辑 org.yaml（编制）', k: 'G 5', run: function () { go('editor'); } },
+    { t: '⚙️ 打开设置（模型绑定 / 通知 / Registry）', k: 'G 6', run: function () { go('settings'); } },
+    { t: '🔁 切换组织：尽调团队 due-diligence', k: '', run: function () { toast('原型演示：切换组织'); } },
+    { t: '＋ 从模板新建组织', k: '', run: function () { toast('原型演示：新建组织向导'); } },
+    { t: '⏸ 暂停全部成员（紧急制动）', k: '', run: function () { toast('原型演示：全部成员已暂停'); } }
+  ];
+  var scrim = document.getElementById('scrim'), pal = document.getElementById('palette'),
+      palIn = document.getElementById('palIn'), palList = document.getElementById('palList');
+  function renderCmds(q) {
+    palList.innerHTML = '';
+    CMDS.filter(function (c) { return !q || c.t.toLowerCase().indexOf(q.toLowerCase()) > -1; })
+      .forEach(function (c, i) {
+        var b = document.createElement('button');
+        b.className = 'cmd' + (i === 0 ? ' hl' : ''); b.type = 'button';
+        b.innerHTML = '<span>' + c.t + '</span>' + (c.k ? '<span class="k">' + c.k + '</span>' : '');
+        b.addEventListener('click', function () { closePal(); c.run(); });
+        palList.appendChild(b);
+      });
+  }
+  function openPal() { scrim.classList.add('on'); pal.classList.add('on'); palIn.value = ''; renderCmds(''); palIn.focus(); }
+  function closePal() { scrim.classList.remove('on'); pal.classList.remove('on'); }
+  document.getElementById('searchBox').addEventListener('click', openPal);
+  document.getElementById('searchBox').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') openPal(); });
+  scrim.addEventListener('click', closePal);
+  palIn.addEventListener('input', function () { renderCmds(palIn.value); });
+  document.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPal(); }
+    if (e.key === 'Escape') closePal();
+    if (e.key === 'Enter' && pal.classList.contains('on')) {
+      var hl = palList.querySelector('.cmd.hl') || palList.querySelector('.cmd');
+      if (hl) hl.click();
+    }
+  });
+})();
+</script>

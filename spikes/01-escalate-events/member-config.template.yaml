@@ -1,0 +1,35 @@
+# Spike 用最小成员配置（对照官方 config.example.yaml 现场校正）
+# 密钥经 $VAR 引用环境变量——不落盘（与配置体系"密钥零落盘"一致）
+# 运行时需设置：DEER_FLOW_CONFIG_PATH=<本文件渲染后的路径>（已核实的官方解析机制）
+config_version: 26
+
+logging:
+  level: INFO
+
+models:
+  - name: mimo-v2.5
+    display_name: MiMo v2.5
+    use: deerflow.models.patched_mimo:PatchedChatMiMo
+    model: mimo-v2.5
+    api_base: https://api.xiaomimimo.com/v1
+    api_key: $MIMO_API_KEY
+    timeout: 600.0
+    max_retries: 2
+    supports_thinking: false
+    supports_vision: false
+  # 备选：DashScope 兼容模式
+  # - name: qwen-plus
+  #   use: deerflow.models.patched_openai:PatchedChatOpenAI
+  #   model: qwen-plus
+  #   api_base: https://dashscope.aliyuncs.com/compatible-mode/v1
+  #   api_key: $DASHSCOPE_API_KEY
+
+sandbox:
+  use: deerflow.sandbox.local:LocalSandboxProvider
+  allow_host_bash: false
+
+subagents:
+  max_total_per_run: 2
+
+skills:
+  enabled: false
