@@ -1,0 +1,20 @@
+apiVersion: milopack/v1
+name: code-reviewer
+version: 0.1.0
+author: "@milo-official"
+license: MIT
+description: 代码评审员——审查同事交付的代码，输出按严重度分级的问题清单与改进建议。
+deerflow:
+  minVersion: "2.0.0"
+capabilities:
+  - id: code-review
+    description: 审查给定代码（正确性/边界/可读性/安全），输出分级问题清单与修改建议
+    tags: [quality, review]
+    examples: ["评审这份 CSV 处理脚本的健壮性"]
+model_requirements:
+  min_tier: reasoning
+  context_window: ">=128k"
+permissions:
+  network: []
+  filesystem: workspace
+  python_repl: false

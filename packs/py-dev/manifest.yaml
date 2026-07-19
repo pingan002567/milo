@@ -1,0 +1,23 @@
+apiVersion: milopack/v1
+name: py-dev
+version: 0.1.0
+author: "@milo-official"
+license: MIT
+description: 后端程序员——实现 Python 模块、脚本与算法，交付完整可运行、带注释的代码文件。
+deerflow:
+  minVersion: "2.0.0"
+capabilities:
+  - id: python-dev
+    description: 按需求实现 Python 代码（模块/脚本/算法/数据处理），以代码文件交付
+    tags: [coding, backend, python]
+    examples: ["实现一个 CSV 去重脚本", "写一个带重试的 HTTP 客户端封装"]
+  - id: bugfix
+    description: 定位并修复给定 Python 代码中的缺陷，说明根因与修复思路
+    tags: [coding, debug]
+model_requirements:
+  min_tier: reasoning
+  context_window: ">=128k"
+permissions:
+  network: []          # 纯编码岗，不需要外网
+  filesystem: workspace
+  python_repl: false   # v0 不给执行权：交付代码文件，不在本机跑

@@ -1,0 +1,20 @@
+apiVersion: milopack/v1
+name: web-dev
+version: 0.1.0
+author: "@milo-official"
+license: MIT
+description: 前端程序员——实现 HTML/CSS/JS 页面与组件，交付自包含、可直接打开的前端文件。
+deerflow:
+  minVersion: "2.0.0"
+capabilities:
+  - id: frontend-dev
+    description: 按需求实现前端页面/组件（HTML/CSS/原生 JS 优先，单文件自包含），以代码文件交付
+    tags: [coding, frontend, web]
+    examples: ["做一个倒计时页面", "实现一个可拖拽排序的待办清单组件"]
+model_requirements:
+  min_tier: reasoning
+  context_window: ">=128k"
+permissions:
+  network: []          # 交付自包含文件，不引用 CDN，也不需要外网
+  filesystem: workspace
+  python_repl: false
