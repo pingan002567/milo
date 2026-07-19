@@ -123,6 +123,10 @@ export const api = {
       body: JSON.stringify(patch),
     }).then(j) as Promise<{ note: string }>,
 
+  testBindings: (org: string) =>
+    fetch(`/api/orgs/${org}/bindings/test`, { method: "POST" })
+      .then(j) as Promise<{ ok: boolean; model?: string; latency_ms?: number; error?: string }>,
+
   putSecret: (envName: string, value: string) =>
     fetch(`/api/secrets/${envName}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },

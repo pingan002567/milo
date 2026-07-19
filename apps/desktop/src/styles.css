@@ -160,3 +160,53 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 .ikv dt { color: var(--ink-3); } .ikv dd { margin: 0; word-break: break-all; font-family: var(--mono); font-size: 11.5px; }
 .ihead { font-size: 11px; letter-spacing: .09em; font-weight: 700; color: var(--ink-3); margin: 18px 0 8px; }
 .ihead:first-of-type { margin-top: 0; }
+
+/* ─── 设置三原语（对齐 stock-agent-001 settings/shared 形态）─── */
+.settings-stack { display: grid; grid-template-columns: 1fr; gap: 0; max-width: 680px; }
+.setting-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.setting-card-head { display: flex; align-items: center; gap: 12px; }
+.setting-icon-box {
+  flex: none; width: 38px; height: 38px;
+  display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel-2); color: var(--ink-3); font-size: 16px;
+}
+.setting-card-heading { flex: 1; min-width: 0; }
+.setting-card-title { font-size: 15px; font-weight: 650; color: var(--ink); }
+.setting-card-desc { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; line-height: 1.5; }
+.setting-card-badge {
+  flex: none; font-family: var(--mono); font-size: 10px; color: var(--faint);
+  border: 1px solid var(--line); border-radius: 4px; padding: 2px 7px;
+}
+.setting-card-body { margin-top: 14px; }
+.setting-row {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 40px; padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+.setting-row:last-child { border-bottom: none; }
+.setting-row-main { min-width: 0; }
+.setting-row-label { font-size: 12.5px; font-weight: 500; }
+.setting-row-sub { font-size: 11px; color: var(--faint); margin-top: 1px; }
+.setting-row-ctl { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; max-width: 60%; }
+.seg-ctl { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg-ctl button {
+  height: 28px; padding: 0 14px; font-size: 12px; border: none; border-radius: 0;
+  background: var(--panel); color: var(--ink-3); cursor: pointer;
+}
+.seg-ctl button + button { border-left: 1px solid var(--line); }
+.seg-ctl button.on { background: var(--side-hl); color: var(--ink); font-weight: 600; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
+.btn.ghost:hover { background: var(--panel-2); border-color: transparent; }
+.setting-input {
+  width: 100%; height: 34px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--ink); padding: 0 10px; font-size: 13px; font-family: inherit;
+}
+.setting-input::placeholder { color: var(--faint); }
+.field-label { font-size: 12px; color: var(--ink-3); display: block; margin-bottom: 4px; }

@@ -122,6 +122,38 @@ async def update_bindings(org: str, body: BindingsUpdate) -> dict[str, Any]:
     return {"org": org, "model": m, "note": "已保存；对运行中实例需重启组织后生效"}
 
 
+@app.post("/api/orgs/{org}/bindings/test")
+async def test_bindings(org: str) -> dict[str, Any]:
+    """测试连接：用当前绑定发一次最小请求，返回 ok/model/latency_ms/error。"""
+    import time
+
+    import httpx
+
+    from milod.config.paths import org_dir
+    from milod.secretariat.office import _read_secret
+
+    m = (yaml.safe_load((org_dir(org) / "bindings.yaml").read_text(encoding="utf-8"))
+         or {}).get("model") or {}
+    key = _read_secret(m.get("secret_env", ""))
+    if not key:
+        return {"ok": False, "error": f"密钥 {m.get('secret_env')} 未配置"}
+    t0 = time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.post(
+                f"{str(m.get('api_base', '')).rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {key}"},
+                json={"model": m.get("model"), "max_tokens": 8,
+                      "messages": [{"role": "user", "content": "ping"}]},
+            )
+            r.raise_for_status()
+            data = r.json()
+    except Exception as e:  # noqa: BLE001 —— 连接失败原因如实回给设置页
+        return {"ok": False, "error": str(e)[:200]}
+    return {"ok": True, "model": data.get("model") or m.get("model"),
+            "latency_ms": int((time.monotonic() - t0) * 1000)}
+
+
 @app.put("/api/secrets/{env_name}")
 async def put_secret(env_name: str, body: SecretUpdate) -> dict[str, Any]:
     """密钥入 OS 钥匙串（keyring service=milo）。零落盘、不回显、不入日志。"""
