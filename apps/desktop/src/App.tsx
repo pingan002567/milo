@@ -3,7 +3,7 @@ import { GroupView } from "./components/GroupView";
 import { MarketView } from "./components/MarketView";
 import { OrgView } from "./components/OrgView";
 import { RosterView } from "./components/RosterView";
-import { MemberChatModal } from "./components/MemberChatModal";
+import { MemberChatView } from "./components/MemberChatModal";
 import { SecretaryView } from "./components/SecretaryView";
 import { SettingsModal } from "./components/SettingsView";
 import {
@@ -13,7 +13,7 @@ import {
 } from "./lib/api";
 import { initNotifications, notifyForEvent, onNotificationOpen } from "./lib/notify";
 
-type Screen = "chat" | "todo" | "org" | "market" | "roster" | "group";
+type Screen = "chat" | "todo" | "org" | "market" | "roster" | "group" | "dm";
 const LAST_ORG = "milo.lastOrg";
 
 export default function App() {
@@ -35,16 +35,18 @@ export default function App() {
   const [focusTask, setFocusTask] = useState<string | null>(null);
   const [secEvents, setSecEvents] = useState<MiloEvent[]>([]);  // 秘书对话实时流
   const [dmTarget, setDmTarget] = useState<string | null>(null);   // 私聊对象
+  const [dms, setDms] = useState<{ group_id: string; member: string }[]>([]);  // 私聊会话列表
   const [dmEvents, setDmEvents] = useState<MiloEvent[]>([]);       // 私聊实时流
   const seen = useRef(new Set<string>());
 
   const refreshLists = useCallback(async () => {
-    const [g, t, m] = await Promise.all([
+    const [g, t, m, d] = await Promise.all([
       api.groups(ORG).catch(() => ({ groups: [] })),
       api.todos(ORG).catch(() => ({ todos: [] })),
       api.members(ORG).catch(() => ({ members: [] })),
+      api.dms(ORG).catch(() => ({ dms: [] })),
     ]);
-    setGroups(g.groups); setTodos(t.todos); setMembers(m.members);
+    setGroups(g.groups); setTodos(t.todos); setMembers(m.members); setDms(d.dms);
   }, [ORG]);
 
   // 组织列表（顶栏切换用）
@@ -113,6 +115,12 @@ export default function App() {
   // 点击系统通知（或点击后激活窗口）→ 直达对应任务群
   useEffect(() => { onNotificationOpen(openGroup); }, [openGroup]);
 
+  const openDM = (member: string) => {
+    setDmTarget(member);
+    setScreen("dm");
+    refreshLists(); // 首次私聊后左栏立即出现该会话
+  };
+
   const onReply = async (taskId: string, answer: string) => {
     await api.reply(ORG, taskId, answer);
     await refreshLists();
@@ -171,6 +179,21 @@ export default function App() {
           ⚙️ 设置
         </button>
 
+        <div className="dmsec">
+          <div className="grplabel">私聊</div>
+          <div className="glist" style={{ flex: "none", maxHeight: 130 }}>
+            {dms.map((d) => (
+              <button key={d.group_id}
+                      className={`gitem ${screen === "dm" && dmTarget === d.member ? "on" : ""}`}
+                      onClick={() => openDM(d.member)}>
+                <span className="ava sm o">{d.member.slice(0, 1).toUpperCase()}</span>
+                <span className="gt">{d.member}</span>
+              </button>
+            ))}
+            {dms.length === 0 && <div className="foot">在「团队」页对成员发起私聊</div>}
+          </div>
+        </div>
+
         <div className="grpsec">
           <div className="grplabel">任务群</div>
           <input className="gsearch" placeholder="搜索任务群…" value={filter}
@@ -195,6 +218,10 @@ export default function App() {
       <main className="main">
         {screen === "chat" && <SecretaryView org={ORG} liveEvents={secEvents} />}
 
+        {screen === "dm" && dmTarget && (
+          <MemberChatView org={ORG} member={dmTarget} liveEvents={dmEvents} />
+        )}
+
         {screen === "todo" && (
           <>
             <div className="h">待你决定 · 跨群聚合</div>
@@ -214,7 +241,7 @@ export default function App() {
           </>
         )}
 
-        {screen === "org" && <OrgView org={ORG} onChanged={refreshLists} onDM={setDmTarget} />}
+        {screen === "org" && <OrgView org={ORG} onChanged={refreshLists} onDM={openDM} />}
 
         {screen === "market" && <MarketView onChanged={refreshLists} />}
 
@@ -265,11 +292,6 @@ export default function App() {
 
       <SettingsModal org={ORG} open={settingsOpen} connected={conn === "open"}
                      onClose={() => setSettingsOpen(false)} />
-
-      {dmTarget && (
-        <MemberChatModal org={ORG} member={dmTarget} liveEvents={dmEvents}
-                         onClose={() => setDmTarget(null)} />
-      )}
 
       <div className="statusbar">
         <span className={`dot ${conn}`} />

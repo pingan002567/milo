@@ -201,6 +201,9 @@ export const api = {
     fetch(`/api/orgs/${org}/members/${name}${force ? "?force=true" : ""}`, { method: "DELETE" })
       .then(j) as Promise<{ name: string; status: string }>,
 
+  dms: (org: string): Promise<{ dms: (GroupSummary & { member: string })[] }> =>
+    fetch(`/api/orgs/${org}/dms`).then(j),
+
   groups: (org: string): Promise<{ groups: GroupSummary[] }> =>
     fetch(`/api/orgs/${org}/groups`).then(j),
 

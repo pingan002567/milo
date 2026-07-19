@@ -195,6 +195,18 @@ async def secretary_chat(org: str, body: SecretaryChatRequest) -> dict[str, Any]
     return {"status": "ok"}
 
 
+@app.get("/api/orgs/{org}/dms")
+async def list_dms(org: str) -> dict[str, Any]:
+    """私聊会话列表（左栏「私聊」区块）：每名聊过的成员一条。"""
+    office = await hub.office(org)
+    dms = []
+    for g in office.store.groups():
+        if not g["group_id"].startswith("dm-"):
+            continue
+        dms.append({**g, "member": g["group_id"][3:]})
+    return {"dms": dms}
+
+
 # ---- 任务群 ---------------------------------------------------------------
 @app.get("/api/orgs/{org}/groups")
 async def list_groups(org: str) -> dict[str, Any]:
