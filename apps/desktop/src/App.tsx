@@ -31,6 +31,7 @@ export default function App() {
   const [filter, setFilter] = useState("");
   const [input, setInput] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [focusTask, setFocusTask] = useState<string | null>(null);
   const seen = useRef(new Set<string>());
 
   const refreshLists = useCallback(async () => {
@@ -64,8 +65,9 @@ export default function App() {
     setPlan(await api.plan(ORG, id).then((p) => p.steps).catch(() => null));
   }, [ORG]);
 
-  const openGroup = useCallback(async (id: string) => {
+  const openGroup = useCallback(async (id: string, focusTask?: string) => {
     setGid(id); setScreen("group"); seen.current.clear();
+    setFocusTask(focusTask ?? null);
     const d = await api.group(ORG, id);
     setEvents(d.events); setTasks(d.tasks); setTitle(d.title); setGstatus(d.status);
     d.events.forEach((e) => seen.current.add(e.event_id));
@@ -83,7 +85,9 @@ export default function App() {
       if (!e.replay) notifyForEvent(e);
       setEvents((prev) => (e.group_id === gidRef.current ? [...prev, e] : prev));
       refreshLists();
-      if (e.group_id === gidRef.current) {
+      // 汇报（status）是 token 级高频流，只 append 不重拉详情——
+      // 否则长会话是 O(n²) 请求；状态推进类事件才需要同步任务/群状态
+      if (e.group_id === gidRef.current && e.type !== "status") {
         api.group(ORG, e.group_id).then((d) => {
           setTasks(d.tasks); setGstatus(d.status); setTitle(d.title);
           // 分解要几十秒——计划卡不能只在打开群时拉一次；
@@ -210,7 +214,8 @@ export default function App() {
           <>
             <div className="h">待你决定 · 跨群聚合</div>
             {todos.map((t) => (
-              <div key={t.task_id} className="card todo crit" onClick={() => openGroup(t.group_id)}>
+              <div key={t.task_id} className="card todo crit"
+                   onClick={() => openGroup(t.group_id, t.task_id)}>
                 <div className="who">
                   <span>{t.member} · 任务群 {t.group_id}</span>
                   <span className="ghint">点击进入任务群处理 →</span>
@@ -233,7 +238,8 @@ export default function App() {
         {screen === "roster" && <RosterView org={ORG} />}
 
         {screen === "group" && gid && (
-          <GroupView title={title} status={gstatus} events={events} tasks={tasks} plan={plan}
+          <GroupView org={ORG} title={title} status={gstatus} events={events} tasks={tasks}
+                     plan={plan} focusTaskId={focusTask}
                      onReply={onReply} onApprove={onApprove} onReject={onReject} />
         )}
       </main>
@@ -252,7 +258,7 @@ export default function App() {
             {tasks.map((t) => (
               <div key={t.task_id} style={{ fontSize: 12.5, padding: "5px 0", borderBottom: "1px dashed var(--line)" }}>
                 <div>{t.task_id} <span className={`chip ${t.state === "input_required" ? "warn" : t.state === "accepted" ? "ok" : ""}`}>{t.state}</span></div>
-                <div className="muted">{t.member} · 第 {t.attempts} 次执行{t.stop_reason ? ` · ${t.stop_reason}` : ""}</div>
+                <div className="muted">{t.member} · {t.attempts} 轮执行{t.stop_reason ? ` · ${t.stop_reason}` : ""}</div>
               </div>
             ))}
           </>

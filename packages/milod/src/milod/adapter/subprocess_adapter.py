@@ -82,8 +82,14 @@ class SubprocessAdapter(MemberAdapter):
         )
         return str(res.get("thread_id", envelope.task_id))
 
-    async def resume(self, task_id: str, answer: str) -> None:
-        """组长答复后恢复被 ask_clarification 中断的任务。"""
+    async def resume(self, task_id: str, answer: str, *, group_id: str | None = None) -> None:
+        """组长答复后恢复被 ask_clarification 中断的任务。
+
+        group_id 必须随 resume 补注册：milod 重启后 _group_of 是空的，
+        缺了它事件会回落用 task_id 当群号，在 groups 表里长出幽灵群。
+        """
+        if group_id:
+            self._group_of[task_id] = group_id
         await self._call("resume", {"task_id": task_id, "answer": answer})
 
     async def events(self) -> AsyncIterator[MiloEvent]:  # type: ignore[override]

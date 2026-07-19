@@ -159,6 +159,10 @@ export const api = {
     }>;
   },
 
+  artifact: (org: string, taskId: string, name: string) =>
+    fetch(`/api/orgs/${org}/artifacts/${taskId}/${encodeURIComponent(name)}`)
+      .then(j) as Promise<{ name: string; size: number; content: string; truncated: boolean }>,
+
   todos: (org: string): Promise<{ todos: Todo[] }> =>
     fetch(`/api/orgs/${org}/todos`).then(j),
 

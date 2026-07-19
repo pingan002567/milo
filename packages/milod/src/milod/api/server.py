@@ -206,6 +206,23 @@ async def group_detail(
     }
 
 
+# ---- 产物 -----------------------------------------------------------------
+@app.get("/api/orgs/{org}/artifacts/{task_id}/{name}")
+async def get_artifact_file(org: str, task_id: str, name: str) -> dict[str, Any]:
+    """产物预览：老板在任务群里验货的入口（成果归组织，存组织级 artifacts/）。"""
+    from milod.config.paths import artifacts_dir
+
+    # 只取文件名部分，杜绝路径穿越
+    p = artifacts_dir(org) / Path(task_id).name / Path(name).name
+    if not p.is_file():
+        raise HTTPException(404, f"产物不存在：{task_id}/{name}")
+    size = p.stat().st_size
+    limit = 200_000
+    text = p.read_text(encoding="utf-8", errors="replace")[:limit]
+    return {"name": p.name, "size": size, "content": text,
+            "truncated": size > limit}
+
+
 # ---- 待办（跨群聚合）------------------------------------------------------
 @app.get("/api/orgs/{org}/roster")
 async def roster(org: str) -> dict[str, Any]:

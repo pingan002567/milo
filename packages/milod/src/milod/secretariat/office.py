@@ -251,7 +251,7 @@ class Office:
         ))
         self.store.set_state(task_id, TaskState.WORKING, run_id=self._new_run(task_id))
         self._busy.add(member)
-        await self._adapters[member].resume(task_id, answer)
+        await self._adapters[member].resume(task_id, answer, group_id=row["group_id"])
 
     def last_delivery(self, task_id: str) -> dict[str, Any] | None:
         """取某任务的交付事件负载（供产物前递给下一步）。"""
