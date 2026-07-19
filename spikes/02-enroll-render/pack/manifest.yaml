@@ -22,5 +22,5 @@ permissions:
   filesystem: workspace
   python_repl: false
 eval:
-  suite: evals/
+  suite: eval/smoke.yaml
   min_score: 4.0

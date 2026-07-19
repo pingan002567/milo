@@ -1,6 +1,28 @@
 import { useEffect, useState } from "react";
 import { api, type PackInfo, type Permissions } from "../lib/api";
 
+/** 质检徽章：实测（本机复跑）与自报（作者声明）分开呈现——信任来自复跑。 */
+function EvalBadge({ p }: { p: PackInfo }) {
+  const r = p.eval_report;
+  if (r) {
+    return (
+      <span className={`chip ${r.meets_min ? "ok" : "warn"}`} style={{ marginLeft: "auto" }}
+            title={`实测于 ${r.ran_at}${r.model ? ` · ${r.model}` : ""}`}>
+        实测 {r.score}/5（{r.cases_passed}/{r.cases_total}）{r.meets_min ? "" : " · 未达自报门槛"}
+      </span>
+    );
+  }
+  if (p.eval?.min_score != null) {
+    return (
+      <span className="chip" style={{ marginLeft: "auto" }}
+            title="作者自报，本机尚未复跑（milo eval <pack>）">
+        自报 {p.eval.min_score} · 未实测
+      </span>
+    );
+  }
+  return null;
+}
+
 /** 权限摘要——包声明得越收敛，用户越少被打扰（招聘时最该看的一行）。 */
 function permText(p?: Permissions): string {
   if (!p) return "未声明权限";
@@ -12,11 +34,18 @@ function permText(p?: Permissions): string {
 
 export function MarketView({ org, onEnrolled }: { org: string; onEnrolled: () => void }) {
   const [packs, setPacks] = useState<PackInfo[]>([]);
+  const [hired, setHired] = useState<Set<string>>(new Set()); // 已在花名册的包名
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [q, setQ] = useState("");
 
   useEffect(() => { api.market().then((r) => setPacks(r.packs)).catch(() => setPacks([])); }, []);
+  // 已招聘的包在市场页标出来，避免重复招聘只能靠 409 报错发现
+  useEffect(() => {
+    api.roster(org)
+      .then((r) => setHired(new Set(r.members.map((m) => m.name))))
+      .catch(() => setHired(new Set()));
+  }, [org]);
 
   const enroll = async (p: PackInfo) => {
     setBusy(p.path); setMsg(null);
@@ -24,6 +53,7 @@ export function MarketView({ org, onEnrolled }: { org: string; onEnrolled: () =>
       const r = await api.enroll(org, p.path);
       // 后端 note 是中性术语（成员/编制），展示层统一成公司隐喻，不透传
       setMsg(`已录用 ${r.name}（${r.capabilities.join("、")}）——到「公司」页为其办理入职后开始工作`);
+      setHired((prev) => new Set(prev).add(r.name));
       onEnrolled();
     } catch (e: any) {
       setMsg(`招聘失败：${String(e?.message ?? e).slice(0, 140)}`);
@@ -54,11 +84,7 @@ export function MarketView({ org, onEnrolled }: { org: string; onEnrolled: () =>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
                   <b style={{ fontSize: 14 }}>{p.name}</b>
                   <span className="muted">v{p.version}</span>
-                  {p.eval?.min_score != null && (
-                    <span className="chip ok" style={{ marginLeft: "auto" }}>
-                      质检门槛 {p.eval.min_score}
-                    </span>
-                  )}
+                  <EvalBadge p={p} />
                 </div>
                 <div style={{ margin: "6px 0" }}>
                   {(p.capabilities ?? []).map((c) => (
@@ -72,10 +98,15 @@ export function MarketView({ org, onEnrolled }: { org: string; onEnrolled: () =>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
                   <span className="muted">{p.author}</span>
-                  <button className="btn primary sm" style={{ marginLeft: "auto" }}
-                          disabled={busy === p.path} onClick={() => enroll(p)}>
-                    {busy === p.path ? "录用中…" : "招聘"}
-                  </button>
+                  {hired.has(p.name) ? (
+                    <span className="chip ok" style={{ marginLeft: "auto" }}
+                          title="到「公司」页管理该员工">已在花名册</span>
+                  ) : (
+                    <button className="btn primary sm" style={{ marginLeft: "auto" }}
+                            disabled={busy === p.path} onClick={() => enroll(p)}>
+                      {busy === p.path ? "录用中…" : "招聘"}
+                    </button>
+                  )}
                 </div>
               </>
             )}

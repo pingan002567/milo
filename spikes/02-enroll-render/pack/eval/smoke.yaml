@@ -1,0 +1,20 @@
+# 冒烟评测集（milo 原生 v0 格式；llm-space Thread JSON 导入是 v1）
+# 断言写法：expect.contains（全部须出现在交付摘要）/ regex / artifacts（交付物名）
+# 案例应可离线独立完成（本包 network:[]），且不该触发升级请示
+suite: smoke
+cases:
+  - id: instruction-follow
+    prompt: >-
+      输出一份三条的文献检索注意事项清单（每条一句话）。
+      清单结束后，末尾单独一行原样写出：SMOKE-OK
+    expect:
+      contains: ["SMOKE-OK"]
+      timeout: 240
+
+  - id: citation-format
+    prompt: >-
+      给出一条 APA 第 7 版格式的期刊论文引用示例（可用虚构作者与标题），
+      并用一句话说明年份在该格式中的位置。
+    expect:
+      regex: '\(\d{4}\)'
+      timeout: 240

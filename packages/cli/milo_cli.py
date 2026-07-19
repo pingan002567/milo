@@ -313,6 +313,39 @@ def cmd_log(args) -> int:
     return 0
 
 
+def cmd_eval(args) -> int:
+    """质检冒烟：临时实例跑包内 eval/smoke.yaml，实测报告落盘供市场页展示。"""
+    from milod.evals import run_smoke
+    from milod.evals.smoke import SuiteError
+
+    b = yaml.safe_load((org_dir(args.org) / "bindings.yaml").read_text(encoding="utf-8"))["model"]
+    secrets = {b["secret_env"]: _read_secret(b["secret_env"])}
+    if not secrets[b["secret_env"]]:
+        _p("[!]", f"未找到密钥 {b['secret_env']}（keyring/环境变量均为空），评测无法调模型", "r")
+        return 1
+
+    def prog(cid: str, passed: bool, reasons: list[str]) -> None:
+        if passed:
+            _p("[✓]", cid, "g")
+        else:
+            _p("[✗]", f"{cid} —— {'；'.join(reasons)}", "r")
+
+    try:
+        report = asyncio.run(run_smoke(Path(args.pack).expanduser(), model=b,
+                                       secrets=secrets, on_progress=prog))
+    except SuiteError as e:
+        _p("[!]", str(e), "r")
+        return 1
+    tone = "g" if report["meets_min"] else "r"
+    _p("[评]", f"{report['pack']}@{report['version']}  实测 {report['score']}/5"
+       f"（{report['cases_passed']}/{report['cases_total']} 通过）"
+       f"  自报门槛 {report['min_score']}  "
+       f"{'达标' if report['meets_min'] else '未达标'}", tone)
+    from milod.evals import report_path
+    print(f"    报告：{report_path(report['pack'], report['version'])}")
+    return 0 if report["meets_min"] else 2
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="milo")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -346,6 +379,11 @@ def main() -> int:
     p.add_argument("org")
     p.add_argument("--timeout", type=float, default=120)
     p.set_defaults(fn=cmd_recover)
+
+    p = sub.add_parser("eval", help="质检冒烟（实测报告，市场页据此'验货'）")
+    p.add_argument("pack", help="MiloPack 目录")
+    p.add_argument("--org", default="demo", help="借用哪个组织的模型绑定（默认 demo）")
+    p.set_defaults(fn=cmd_eval)
 
     p = sub.add_parser("log", help="查看任务群记录")
     p.add_argument("org"); p.add_argument("group", nargs="?")

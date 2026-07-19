@@ -165,6 +165,7 @@ async def market() -> dict[str, Any]:
     import os
 
     from milod.config.paths import milo_home
+    from milod.evals.smoke import load_report
     from milod.pack.renderer import load_manifest
 
     roots = [Path(p).expanduser() for p in
@@ -181,6 +182,7 @@ async def market() -> dict[str, Any]:
             except Exception as e:  # noqa: BLE001 —— 坏包标注出来，不静默隐藏
                 packs.append({"path": str(d), "name": d.name, "error": str(e)})
                 continue
+            report = load_report(mf["name"], mf.get("version"))
             packs.append({
                 "path": str(d),
                 "name": mf["name"],
@@ -192,6 +194,16 @@ async def market() -> dict[str, Any]:
                 "permissions": mf.get("permissions", {}),
                 "model_requirements": mf.get("model_requirements", {}),
                 "eval": mf.get("eval", {}),
+                # 自报（manifest.eval）与实测（本机 milo eval 报告）分开呈现——
+                # 信任来自复跑，不来自作者声明
+                "eval_report": report and {
+                    "score": report.get("score"),
+                    "cases_total": report.get("cases_total"),
+                    "cases_passed": report.get("cases_passed"),
+                    "meets_min": report.get("meets_min"),
+                    "ran_at": report.get("ran_at"),
+                    "model": report.get("model"),
+                },
             })
     return {"packs": packs}
 

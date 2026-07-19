@@ -65,6 +65,11 @@ export interface PackInfo {
   capabilities?: { id: string; description: string }[];
   permissions?: Permissions; model_requirements?: { min_tier?: string; context_window?: string };
   eval?: { suite?: string; min_score?: number };
+  /** 本机实测报告（milo eval）；null/缺失 = 未实测，只有作者自报门槛 */
+  eval_report?: {
+    score: number; cases_total: number; cases_passed: number;
+    meets_min: boolean; ran_at: string; model?: string;
+  } | null;
   error?: string;
 }
 export interface RosterMember {
