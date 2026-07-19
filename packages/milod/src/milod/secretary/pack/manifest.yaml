@@ -1,0 +1,19 @@
+# 内置 SecretaryPack：系统自带，不进市场、不占编制、不可移出（秘书Agent设计 §四）
+apiVersion: milopack/v1
+name: secretary
+version: 0.1.0
+author: "@milo-builtin"
+license: MIT
+description: 秘书——服务用户管理和使用 Milo 全部能力的对话式操作面。
+deerflow:
+  minVersion: "2.0.0"
+capabilities:
+  - id: system-copilot
+    description: 系统对话入口：查询团队/任务/市场，代用户派活
+model_requirements:
+  min_tier: reasoning
+  context_window: ">=128k"
+permissions:
+  network: []          # 秘书对系统的一切作用收敛为 Milo Tools（本地回环 API）
+  filesystem: readonly # 无文件写、无 bash（秘书Agent设计 §三"明确不给"）
+  python_repl: false

@@ -34,6 +34,8 @@ class MemberSpec(BaseModel):
     model_bindings: dict[str, str] = Field(default_factory=dict)
     #: 密钥最小注入：只含该成员档位所需的凭证（由 keyring 解引用后填入，不落盘）
     secrets: dict[str, str] = Field(default_factory=dict)
+    #: 非密钥的附加环境（如秘书的 MILO_API_BASE/MILO_ORG），与 secrets 分开以明语义
+    extra_env: dict[str, str] = Field(default_factory=dict)
 
 
 class Delivery(BaseModel):

@@ -19,10 +19,32 @@ from milod.secretariat.route import NoMemberForTask
 class Hub:
     def __init__(self) -> None:
         self._offices: dict[str, Office] = {}
+        self._desks: dict[str, Any] = {}  # org -> SecretaryDesk（对话式操作面）
         self._subs: dict[str, set[asyncio.Queue]] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         self._pending_plans: dict[str, list] = {}  # group_id -> 待批准的任务信封
         self._lock = asyncio.Lock()
+
+    # ---- 秘书 ----------------------------------------------------------
+    async def secretary(self, org: str):
+        """取该团队的秘书（懒启动）：一个团队一个实例，常驻记忆。"""
+        import os
+
+        from milod.secretary import SECRETARY_GROUP, SecretaryDesk
+
+        office = await self.office(org)
+        if org not in self._desks:
+            b = office._bindings()["model"]
+            desk = SecretaryDesk(
+                org,
+                api_base=f"http://127.0.0.1:{os.environ.get('MILO_PORT', '8899')}",
+                emit=office._emit,
+            )
+            office.store.ensure_group(SECRETARY_GROUP, title="秘书")
+            await desk.ensure_started(
+                model=b, secrets={b["secret_env"]: _read_secret(b["secret_env"])})
+            self._desks[org] = desk
+        return self._desks[org]
 
     # ---- 组织 ----------------------------------------------------------
     async def office(self, org: str) -> Office:
@@ -43,6 +65,9 @@ class Hub:
     async def close_all(self) -> None:
         for t in self._tasks.values():
             t.cancel()
+        for d in self._desks.values():
+            await d.close()
+        self._desks.clear()
         for o in self._offices.values():
             await o.close()
         self._offices.clear()

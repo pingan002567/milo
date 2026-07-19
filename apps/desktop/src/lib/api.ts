@@ -128,6 +128,12 @@ export const api = {
       body: JSON.stringify({ agent, name, activate }),
     }).then(j) as Promise<{ name: string; capabilities: string[]; status: string; note: string }>,
 
+  secretaryChat: (org: string, text: string) =>
+    fetch(`/api/orgs/${org}/secretary/chat`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }).then(j) as Promise<{ status: string }>,
+
   library: (): Promise<{ library: LibraryItem[] }> => fetch(`/api/library`).then(j),
 
   download: (sourcePath: string) =>

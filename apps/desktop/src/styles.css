@@ -363,3 +363,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 .hireform { display: flex; gap: 8px; align-items: center; margin-top: 8px;
   padding: 8px 10px; background: var(--panel-2); border-radius: 8px; }
 .btn.star.on { color: var(--amber); border-color: var(--amber-soft); }
+
+/* ─── 秘书对话页 ─── */
+.secpage { display: flex; flex-direction: column; height: calc(100vh - 76px); max-width: 760px; }
+.secmsgs { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 8px; }
+.seccomposer { margin-top: 10px; }

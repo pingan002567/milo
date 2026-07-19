@@ -3,6 +3,7 @@ import { GroupView } from "./components/GroupView";
 import { MarketView } from "./components/MarketView";
 import { OrgView } from "./components/OrgView";
 import { RosterView } from "./components/RosterView";
+import { SecretaryView } from "./components/SecretaryView";
 import { SettingsModal } from "./components/SettingsView";
 import {
   api, subscribe,
@@ -29,9 +30,9 @@ export default function App() {
   const [gstatus, setGstatus] = useState("active");
   const [plan, setPlan] = useState<PlanStep[] | null>(null);
   const [filter, setFilter] = useState("");
-  const [input, setInput] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [focusTask, setFocusTask] = useState<string | null>(null);
+  const [secEvents, setSecEvents] = useState<MiloEvent[]>([]);  // 秘书对话实时流
   const seen = useRef(new Set<string>());
 
   const refreshLists = useCallback(async () => {
@@ -56,6 +57,7 @@ export default function App() {
     localStorage.setItem(LAST_ORG, next);
     setOrg(next);
     setScreen("chat"); setGid(null); setEvents([]); setTasks([]); setPlan(null);
+    setSecEvents([]);
     seen.current.clear();
   };
 
@@ -84,6 +86,7 @@ export default function App() {
       // 只有 mention/notify 会打扰用户；补发的历史事件不再重复通知
       if (!e.replay) notifyForEvent(e);
       setEvents((prev) => (e.group_id === gidRef.current ? [...prev, e] : prev));
+      if (e.group_id === "secretary") setSecEvents((prev) => [...prev, e]);
       refreshLists();
       // 汇报（status）是 token 级高频流，只 append 不重拉详情——
       // 否则长会话是 O(n²) 请求；状态推进类事件才需要同步任务/群状态
@@ -105,15 +108,6 @@ export default function App() {
 
   // 点击系统通知（或点击后激活窗口）→ 直达对应任务群
   useEffect(() => { onNotificationOpen(openGroup); }, [openGroup]);
-
-  const submitRequest = async () => {
-    const text = input.trim();
-    if (!text) return;
-    setInput("");
-    const { group_id } = await api.run(ORG, text, false); // 走计划批准回合
-    await refreshLists();
-    await openGroup(group_id); // 立即进群看"分解中"，计划卡随事件到达
-  };
 
   const onReply = async (taskId: string, answer: string) => {
     await api.reply(ORG, taskId, answer);
@@ -195,20 +189,7 @@ export default function App() {
 
       {/* ── 中栏：主内容 ── */}
       <main className="main">
-        {screen === "chat" && (
-          <>
-            <div className="h">向秘书下达任务</div>
-            <div className="muted" style={{ maxWidth: 620, marginBottom: 14 }}>
-              秘书会把需求分解成计划交你批准，然后派给团队成员；只有需要你拍板的事才会打扰你。
-            </div>
-            <div className="composer">
-              <input placeholder="例如：整理三条大模型应用场景要点…" value={input}
-                     onChange={(e) => setInput(e.target.value)}
-                     onKeyDown={(e) => e.key === "Enter" && submitRequest()} />
-              <button className="btn primary" onClick={submitRequest}>发送</button>
-            </div>
-          </>
-        )}
+        {screen === "chat" && <SecretaryView org={ORG} liveEvents={secEvents} />}
 
         {screen === "todo" && (
           <>

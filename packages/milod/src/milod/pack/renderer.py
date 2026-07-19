@@ -67,6 +67,8 @@ def render(
     member_name: str | None = None,
     model: dict[str, Any],
     secrets: dict[str, str] | None = None,
+    extra_tools: list[dict[str, Any]] | None = None,  # 追加工具（秘书的 Milo Tools）
+    workdir: Path | None = None,                      # 工作区覆盖（秘书住 orgs/<org>/secretary/）
 ) -> MemberSpec:
     """渲染一个成员的私有工作区，返回可直接交给 adapter.enroll 的 MemberSpec。
 
@@ -83,7 +85,7 @@ def render(
         import hashlib
 
         slug = f"{manifest['name']}-{hashlib.md5(name.encode()).hexdigest()[:6]}"
-    workdir = org_root / "members" / name
+    workdir = workdir or (org_root / "members" / name)
     home = workdir / "home"
     agent_dir = home / "agents" / slug
     skills_root = home / "skills"
@@ -147,7 +149,7 @@ def render(
         # skills.path 必须显式绝对路径，缺省会指向"调用方项目根"导致技能静默不可见
         "skills": {"path": str(skills_root.resolve()), "deferred_discovery": False},
         # 权限收敛：无网络白名单则不注入检索工具——成员想越权也执行不了
-        "tools": _tools_for(perms),
+        "tools": _tools_for(perms) + list(extra_tools or []),
     }
     (workdir / "config.yaml").write_text(
         yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8"

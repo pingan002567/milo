@@ -178,12 +178,30 @@ async def list_members(org: str) -> dict[str, Any]:
     }
 
 
+# ---- 秘书（对话式操作面）--------------------------------------------------
+class SecretaryChatRequest(BaseModel):
+    text: str
+
+
+@app.post("/api/orgs/{org}/secretary/chat")
+async def secretary_chat(org: str, body: SecretaryChatRequest) -> dict[str, Any]:
+    """给秘书发消息。回复经 WS 推送（group_id=secretary），历史走群接口。"""
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(422, "消息不能为空")
+    desk = await hub.secretary(org)
+    task = asyncio.create_task(desk.chat(text))
+    hub.track(f"secretary-{org}-{uuid.uuid4().hex[:4]}", task)
+    return {"status": "ok"}
+
+
 # ---- 任务群 ---------------------------------------------------------------
 @app.get("/api/orgs/{org}/groups")
 async def list_groups(org: str) -> dict[str, Any]:
-    """左边栏任务群列表：@你 未处理的带角标。"""
+    """左边栏任务群列表：@你 未处理的带角标（org 审计群与秘书对话群不在其列）。"""
     office = await hub.office(org)
-    return {"groups": [g for g in office.store.groups() if g["group_id"] != "org"]}
+    return {"groups": [g for g in office.store.groups()
+                       if g["group_id"] not in ("org", "secretary")]}
 
 
 @app.get("/api/orgs/{org}/groups/{group_id}")
@@ -516,6 +534,8 @@ async def enroll_member(org: str, body: EnrollRequest) -> dict[str, Any]:
         raise HTTPException(422, "聘用必须给实例起名（§3.5：名字属于这个人，不是岗位）")
     if not (1 <= len(name) <= 20):
         raise HTTPException(422, "实例名长度需在 1–20 字符")
+    if name.lower() in {"secretary", "secretariat", "system", "owner", "org"} or name == "秘书":
+        raise HTTPException(422, f"{name} 是系统保留名，不能用作成员名")
 
     f = org_dir(org) / "org.yaml"
     doc = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
