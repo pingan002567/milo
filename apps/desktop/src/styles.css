@@ -423,3 +423,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 .msgcopy { border: 1px solid var(--line); background: var(--panel); color: var(--ink-3);
   border-radius: 6px; font-size: 11px; padding: 2px 9px; cursor: pointer; }
 .msgcopy:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* ─── 设置·权限页 ─── */
+.perm-hint { font-size: 11px; color: var(--faint); margin-top: 6px; line-height: 1.5; }
+.replbox { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.replbox.danger { border-color: rgba(239, 68, 68, 0.4); background: var(--crit-soft); }
+.perm-warn { margin-top: 8px; font-size: 11.5px; color: var(--crit); line-height: 1.6; }
+.perm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.perm-table th { text-align: left; font-size: 11px; color: var(--ink-3); font-weight: 600;
+  padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.perm-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.perm-table tr:last-child td { border-bottom: none; }

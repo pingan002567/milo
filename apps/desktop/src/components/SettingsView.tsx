@@ -81,8 +81,6 @@ function GeneralTab({ org }: { org: string }) {
         </SettingRow>
       </SectionCard>
 
-      <DefaultPermissionsCard />
-
       <SectionCard title="工作区" description="当前团队与数据目录；切换团队在左栏顶部">
         <SettingRow label="当前团队">
           <span className="mono" style={{ fontSize: 12 }}>{org}</span>
@@ -100,31 +98,47 @@ function GeneralTab({ org }: { org: string }) {
   );
 }
 
-/** 默认权限（2026-07-20 决策：权限是本地环境的属性，不是包的属性）。 */
-function DefaultPermissionsCard() {
-  const [net, setNet] = useState("");
+/* ---------- 权限（2026-07-20 决策：权限是本地环境的属性）---------- */
+
+/** 权限值的紧凑摘要（成员总览用）。 */
+function permSummary(p?: Permissions | null): { net: string; fs: string; repl: boolean } {
+  return {
+    net: !p?.network?.length ? "禁网" : `${p.network.length} 域名`,
+    fs: p?.filesystem === "readonly" ? "只读" : "读写",
+    repl: Boolean(p?.python_repl),
+  };
+}
+
+function PermissionsTab({ org }: { org: string }) {
+  const [domains, setDomains] = useState<string[]>([]);
+  const [domainInput, setDomainInput] = useState("");
   const [fs, setFs] = useState("workspace");
   const [repl, setRepl] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [members, setMembers] = useState<Array<{
+    name: string; agent?: string | null; loaded?: boolean; permissions?: Permissions;
+  }>>([]);
 
   useEffect(() => {
     api.getDefaults().then((r) => {
-      setNet((r.permissions.network ?? []).join(", "));
+      setDomains(r.permissions.network ?? []);
       setFs(r.permissions.filesystem ?? "workspace");
       setRepl(Boolean(r.permissions.python_repl));
     }).catch(() => setMsg("读取默认权限失败"));
-  }, []);
+    api.roster(org).then((r) => setMembers(r.members)).catch(() => setMembers([]));
+  }, [org]);
+
+  const addDomain = () => {
+    const v = domainInput.trim();
+    if (v && !domains.includes(v)) { setDomains([...domains, v]); setDirty(true); }
+    setDomainInput("");
+  };
 
   const save = async () => {
     setMsg(null);
     try {
-      const permissions: Permissions = {
-        network: net.split(/[,，\s]+/).map((s) => s.trim()).filter(Boolean),
-        filesystem: fs,
-        python_repl: repl,
-      };
-      const r = await api.putDefaults(permissions);
+      const r = await api.putDefaults({ network: domains, filesystem: fs, python_repl: repl });
       setDirty(false);
       setMsg(r.note);
     } catch (e: any) {
@@ -132,43 +146,130 @@ function DefaultPermissionsCard() {
     }
   };
 
+  const defaults = { network: domains, filesystem: fs, python_repl: repl };
+  const differs = (p?: Permissions | null) => {
+    if (!p) return false;
+    const a = permSummary(p), b = permSummary(defaults);
+    return a.net !== b.net || a.fs !== b.fs || a.repl !== b.repl;
+  };
+
   return (
-    <SectionCard title="默认权限" subtitle="新成员初始值"
-      description="新招募成员的初始权限；已有成员不受影响，可在成员详情单独调整">
-      <div style={{ display: "grid", gap: 10 }}>
-        <label>
-          <span className="field-label">外网域名白名单（逗号分隔；留空 = 禁外网）</span>
-          <input className="setting-input" value={net}
-                 onChange={(e) => { setNet(e.target.value); setDirty(true); }}
-                 placeholder="如 *.arxiv.org" />
-        </label>
-        <div className="setting-row">
-          <div className="setting-row-main"><div className="setting-row-label">文件权限</div></div>
-          <div className="setting-row-ctl">
-            <div className="seg-ctl">
-              {([["readonly", "只读"], ["workspace", "读写工作区"]] as const).map(([v, label]) => (
-                <button key={v} type="button" className={fs === v ? "on" : ""}
-                        onClick={() => { setFs(v); setDirty(true); }}>{label}</button>
+    <div className="settings-stack">
+      <SectionCard icon="🛡️" title="默认权限" subtitle="新成员初始值"
+        description="新招募成员的初始权限；已有成员不受影响，可在成员详情单独调整">
+        <div style={{ display: "grid", gap: 12 }}>
+          <div>
+            <span className="field-label">
+              外网访问{domains.length === 0 && <span className="chip" style={{ marginLeft: 8 }}>当前：禁网</span>}
+            </span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "6px 0" }}>
+              {domains.map((d) => (
+                <span key={d} className="chip mono" style={{ fontSize: 11 }}>
+                  {d}
+                  <button className="capx" title="移除域名"
+                          onClick={() => { setDomains(domains.filter((x) => x !== d)); setDirty(true); }}>×</button>
+                </span>
               ))}
             </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input className="setting-input" style={{ flex: 1 }} value={domainInput}
+                     placeholder="添加允许访问的域名，如 *.arxiv.org（回车添加）"
+                     onChange={(e) => setDomainInput(e.target.value)}
+                     onKeyDown={(e) => e.key === "Enter" && addDomain()} />
+              <button className="btn sm" onClick={addDomain} disabled={!domainInput.trim()}>添加</button>
+            </div>
+            <div className="perm-hint">白名单非空时注入 web_search 检索工具；v0 粒度为"有无"，域名级过滤在路线图上</div>
           </div>
+
+          <div className="setting-row">
+            <div className="setting-row-main">
+              <div className="setting-row-label">文件权限</div>
+              <div className="setting-row-sub">
+                {fs === "readonly" ? "注入 ls、read_file——可读不可写，无法交付产物文件"
+                  : "注入 ls、read_file、write_file、str_replace——可产出交付物（路径锁在成员私有沙箱目录内）"}
+              </div>
+            </div>
+            <div className="setting-row-ctl">
+              <div className="seg-ctl">
+                {([["readonly", "只读"], ["workspace", "读写工作区"]] as const).map(([v, label]) => (
+                  <button key={v} type="button" className={fs === v ? "on" : ""}
+                          onClick={() => { setFs(v); setDirty(true); }}>{label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className={`replbox ${repl ? "danger" : ""}`}>
+            <div className="setting-row" style={{ border: "none", minHeight: 0, padding: 0 }}>
+              <div className="setting-row-main">
+                <div className="setting-row-label">代码执行（host bash）</div>
+                <div className="setting-row-sub">在你的电脑上执行任意命令</div>
+              </div>
+              <div className="setting-row-ctl">
+                <input type="checkbox" checked={repl}
+                       onChange={(e) => { setRepl(e.target.checked); setDirty(true); }} />
+              </div>
+            </div>
+            {repl && (
+              <div className="perm-warn">
+                ⚠ 这是实质上的总开关：有了 bash 就能联网（绕过禁网）、能读写任意文件（绕过只读）。
+                harness 官方注明本地沙箱"不是安全边界"。强烈建议默认关闭，只对完全信任的成员单独放开。
+              </div>
+            )}
+          </div>
+
+          {dirty && (
+            <div><button className="btn primary sm" onClick={save}>保存默认权限</button></div>
+          )}
+          {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
         </div>
-        <div className="setting-row">
-          <div className="setting-row-main">
-            <div className="setting-row-label">代码执行（host bash）</div>
-            <div className="setting-row-sub">实质上的总开关——默认建议保持关闭，按成员单独放开</div>
-          </div>
-          <div className="setting-row-ctl">
-            <input type="checkbox" checked={repl}
-                   onChange={(e) => { setRepl(e.target.checked); setDirty(true); }} />
-          </div>
-        </div>
-        {dirty && (
-          <div><button className="btn primary sm" onClick={save}>保存默认权限</button></div>
+      </SectionCard>
+
+      <SectionCard title="权限如何生效" subtitle="fail-closed"
+        description="权限 = 注入什么工具，而不是拦截什么行为——不注入的能力对成员而言不存在">
+        <SettingRow label="生效时机" sub="改动落名册即存档；对运行中的成员需停职 → 复岗重渲染后生效">
+          <span className="tag">复岗生效</span>
+        </SettingRow>
+        <SettingRow label="调整入口" sub="「团队」页成员详情编辑，或私聊里让成员自改（仅私聊线程可用）">
+          <span className="tag">按成员</span>
+        </SettingRow>
+        <SettingRow label="秘书" sub="系统组件权限固定（只读/禁网/无 bash），不随默认设置走">
+          <span className="tag">固定</span>
+        </SettingRow>
+      </SectionCard>
+
+      <SectionCard title={`成员权限总览 · ${org}`} subtitle={`${members.length} 名`}
+        description="当前团队每名成员的实际权限；与默认不同的行有标记">
+        {members.length === 0 ? (
+          <div className="muted">当前团队还没有成员</div>
+        ) : (
+          <table className="perm-table">
+            <thead>
+              <tr><th>成员</th><th>外网</th><th>文件</th><th>代码执行</th><th></th></tr>
+            </thead>
+            <tbody>
+              {members.map((m) => {
+                const s = permSummary(m.permissions);
+                return (
+                  <tr key={m.name}>
+                    <td><b>{m.name}</b>{m.agent && <span className="mono muted" style={{ fontSize: 10, marginLeft: 5 }}>{m.agent}</span>}</td>
+                    <td>{s.net}</td>
+                    <td>{s.fs}</td>
+                    <td>{s.repl
+                      ? <span className="chip crit">开</span>
+                      : <span className="muted">关</span>}</td>
+                    <td>{differs(m.permissions) && <span className="chip warn" title="与默认权限不同">已定制</span>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
-        {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
-      </div>
-    </SectionCard>
+        <div className="perm-hint" style={{ marginTop: 8 }}>
+          调整某名成员：到「团队」页点击该成员打开详情编辑
+        </div>
+      </SectionCard>
+    </div>
   );
 }
 
@@ -289,10 +390,11 @@ function AiTab({ org }: { org: string }) {
 
 /* ---------- 弹窗（照搬 SettingsModal：遮罩+大窗+左导航右内容）---------- */
 
-type Tab = "general" | "ai";
+type Tab = "general" | "perms" | "ai";
 
 const TABS: Array<{ key: Tab; label: string; icon: string }> = [
   { key: "general", label: "通用", icon: "⚙️" },
+  { key: "perms", label: "权限", icon: "🛡️" },
   { key: "ai", label: "AI 配置", icon: "🤖" },
 ];
 
@@ -336,6 +438,7 @@ export function SettingsModal({ org, open, connected, onClose }: {
             </nav>
             <div className="settings-content">
               {tab === "general" && <GeneralTab org={org} />}
+              {tab === "perms" && <PermissionsTab org={org} />}
               {tab === "ai" && <AiTab org={org} />}
             </div>
           </div>
