@@ -148,6 +148,26 @@ export const api = {
       body: JSON.stringify({ agent, name, activate }),
     }).then(j) as Promise<{ name: string; capabilities: string[]; status: string; note: string }>,
 
+  feedback: (org: string, groupId: string, eventId: string, rating: number) =>
+    fetch(`/api/orgs/${org}/feedback`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ group_id: groupId, event_id: eventId, rating }),
+    }).then(j) as Promise<{ status: string }>,
+
+  stopTurn: (org: string, member?: string, taskId?: string) =>
+    fetch(`/api/orgs/${org}/stop`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ member: member ?? null, task_id: taskId ?? null }),
+    }).then(j) as Promise<{ status: string }>,
+
+  uploadFile: async (org: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const r = await fetch(`/api/orgs/${org}/uploads`, { method: "POST", body: fd });
+    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+    return r.json() as Promise<{ name: string; uri: string; size: number }>;
+  },
+
   secretaryChat: (org: string, text: string) =>
     fetch(`/api/orgs/${org}/secretary/chat`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -206,10 +226,11 @@ export const api = {
       .then(j) as Promise<{ name: string; capabilities: string[]; status: string }>,
 
   /** 私聊成员（全权调教通道）：历史在群 dm-<name>，回复经 WS。 */
-  memberDM: (org: string, name: string, text: string) =>
+  memberDM: (org: string, name: string, text: string,
+             attachments?: Array<{ name: string; uri: string }>) =>
     fetch(`/api/orgs/${org}/members/${name}/dm`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, attachments: attachments ?? null }),
     }).then(j) as Promise<{ status: string; group_id: string }>,
 
   /** 成员编辑（§3.5 修正：实例配置归实例所有）。改名仅限未运行时。 */

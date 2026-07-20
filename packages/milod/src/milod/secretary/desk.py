@@ -69,6 +69,11 @@ class SecretaryDesk:
             payload={"text": text}))
         await self._adapter.chat(text, group_id=SECRETARY_GROUP)
 
+    async def cancel(self) -> None:
+        """停止秘书当前回合。"""
+        if self._adapter is not None:
+            await self._adapter.cancel("chat")
+
     async def close(self) -> None:
         if self._pump_task:
             self._pump_task.cancel()
@@ -94,4 +99,8 @@ class SecretaryDesk:
                     self._emit(MiloEvent(
                         group_id=SECRETARY_GROUP, type=EventType.CHAT,
                         actor="secretariat", payload={"text": text}))
-            # system（用量）不进对话流
+            elif ev.type == EventType.SYSTEM and ev.payload.get("aborted"):
+                self._emit(MiloEvent(
+                    group_id=SECRETARY_GROUP, type=EventType.CHAT, actor="secretariat",
+                    payload={"text": "（已停止）", "aborted": True}))
+            # 其余 system（用量）不进对话流

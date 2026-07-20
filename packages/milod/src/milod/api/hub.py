@@ -176,6 +176,19 @@ class Hub:
         office.store.save_pending_plan(group_id, envelopes)
         office.store.set_group_status(group_id, "waiting")
 
+    async def stop_channel(self, org: str, *, member: str | None = None,
+                           task_id: str | None = None) -> bool:
+        """停止正在进行的回合：秘书对话 / 成员私聊 / 任务执行通用。"""
+        office = await self.office(org)
+        if member:
+            await office.cancel(member, task_id or "dm")
+            return True
+        desk = self._desks.get(org)
+        if desk is not None:
+            await desk.cancel()
+            return True
+        return False
+
     # ---- 验收确认与返工（验收与返工设计 §一）----------------------------
     async def accept_group(self, org: str, group_id: str, note: str = "") -> bool:
         """验收通过（**不归档**）：任务留在视野里可继续用、继续提要求；

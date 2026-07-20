@@ -35,6 +35,7 @@ class SubprocessAdapter(MemberAdapter):
         self._group_of: dict[str, str] = {}   # task_id -> group_id
         self._expected_artifacts: dict[str, list[str]] = {}  # task_id -> output_spec.artifacts
         self._summaries: dict[str, str] = {}  # task_id -> 最近一次交付摘要
+        self._stopped: set[str] = set()       # 已被用户停止的通道（丢弃残余事件）
 
     # ---- 生命周期 ------------------------------------------------------
     async def enroll(self, spec: MemberSpec) -> None:
@@ -96,7 +97,8 @@ class SubprocessAdapter(MemberAdapter):
         await self._call("resume", {"task_id": task_id, "answer": answer})
 
     async def chat(self, text: str, *, group_id: str = "secretary",
-                   channel: str = "chat") -> None:
+                   channel: str = "chat", attachments: list[dict] | None = None) -> None:
+        self._stopped.discard(channel)   # 新一轮：解除上次停止的拦截
         """自由对话通道（秘书对话 / 成员私聊共用）：每通道一条常驻线程。
 
         首条消息 assign 建线程，后续 resume 接续——worker 重启后 assign 复用
@@ -106,10 +108,30 @@ class SubprocessAdapter(MemberAdapter):
         started: set[str] = getattr(self, "_chat_channels", None) or set()
         self._chat_channels = started
         if channel in started:
-            await self._call("resume", {"task_id": channel, "answer": text})
+            await self._call("resume", {"task_id": channel, "answer": text,
+                                        "inputs": attachments or []})
         else:
             started.add(channel)
-            await self._call("assign", {"task_id": channel, "prompt": text, "inputs": []})
+            await self._call("assign", {"task_id": channel, "prompt": text,
+                                        "inputs": attachments or []})
+
+    async def cancel(self, task_id: str) -> None:
+        """停止该通道当前回合。
+
+        两层：①给 worker 发 cancel（它在下一次事件迭代时 break——harness 的同步
+        生成器卡在网络 I/O 时无法硬中断）；②**适配层立刻拦截**该通道后续事件并
+        当场发出 aborted，保证用户看到确定的停止，不必等 harness 醒过来。
+        语义诚实：前台立即停止，后台尽力中断（残余 token 会被丢弃）。
+        """
+        self._stopped.add(task_id)
+        await self._events.put(MiloEvent(
+            group_id=self._group_of.get(task_id, task_id), task_id=task_id,
+            type=EventType.SYSTEM, actor=self._spec.name if self._spec else "member",
+            payload={"aborted": True, "msg": "已停止"}))
+        try:
+            await asyncio.wait_for(self._call("cancel", {"task_id": task_id}), timeout=3)
+        except Exception:  # noqa: BLE001 —— worker 忙时收不到也无妨，拦截已生效
+            pass
 
     async def events(self) -> AsyncIterator[MiloEvent]:  # type: ignore[override]
         while True:
@@ -161,6 +183,11 @@ class SubprocessAdapter(MemberAdapter):
             elif isinstance(msg, EventFrame):
                 # 交付摘要只在事件流里出现（worker 的 deliver RPC 只回 artifact 文件），
                 # 在此接住供 deliver() 组装 —— 否则验收会误判"既无产物也无交付内容"
+                if msg.task_id in self._stopped:
+                    # 用户已停止该通道：丢弃残余事件；worker 侧的终局帧解除拦截
+                    if msg.event == "system" and msg.payload.get("aborted"):
+                        self._stopped.discard(msg.task_id)
+                    continue
                 if msg.event == "delivery":
                     summary = str(msg.payload.get("summary") or "")
                     if summary:

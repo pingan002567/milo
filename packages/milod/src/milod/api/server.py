@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect,
+)
 from pydantic import BaseModel
 
 from milod.api.hub import Hub
@@ -370,6 +372,52 @@ async def org_yaml_raw(org: str) -> dict[str, Any]:
     if not f.is_file():
         raise HTTPException(404, f"{org} 没有 org.yaml")
     return {"content": f.read_text(encoding="utf-8")}
+
+
+class StopRequest(BaseModel):
+    member: str | None = None      # 私聊/任务：成员名；缺省 = 秘书
+    task_id: str | None = None
+
+
+@app.post("/api/orgs/{org}/stop")
+async def stop_turn(org: str, body: StopRequest) -> dict[str, Any]:
+    """停止当前回合（秘书对话 / 成员私聊 / 任务执行）。"""
+    ok = await hub.stop_channel(org, member=body.member, task_id=body.task_id)
+    if not ok:
+        raise HTTPException(409, "没有正在进行的回合")
+    return {"status": "stopped"}
+
+
+@app.post("/api/orgs/{org}/uploads")
+async def upload_file(org: str, file: UploadFile = File(...)) -> dict[str, Any]:
+    """上传资料（私聊附件 / 返工资料）：存组织级 uploads，供注入成员输入目录。"""
+    from milod.config.paths import artifacts_dir
+
+    dest_dir = artifacts_dir(org) / "uploads"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    name = Path(file.filename or "file").name
+    dest = dest_dir / name
+    dest.write_bytes(await file.read())
+    return {"name": name, "uri": str(dest), "size": dest.stat().st_size}
+
+
+class FeedbackRequest(BaseModel):
+    group_id: str
+    event_id: str
+    rating: int          # 1 = 好评，-1 = 差评，0 = 撤销
+
+
+@app.post("/api/orgs/{org}/feedback")
+async def post_feedback(org: str, body: FeedbackRequest) -> dict[str, Any]:
+    """消息级反馈：私聊调教时逐条打分，沉淀为该成员的表现数据。"""
+    from milod.models import EventType, MiloEvent
+
+    office = await hub.office(org)
+    office._emit(MiloEvent(
+        group_id=body.group_id, type=EventType.SYSTEM, actor="owner",
+        payload={"feedback": body.rating, "target_event": body.event_id,
+                 "msg": "已评价"}))
+    return {"status": "ok"}
 
 
 @app.get("/api/orgs/{org}/dms")
@@ -839,8 +887,13 @@ async def patch_member(org: str, name: str, body: MemberPatch) -> dict[str, Any]
                      if loaded and restart_needed else "已保存")}
 
 
+class DMRequest(BaseModel):
+    text: str
+    attachments: list[dict[str, Any]] | None = None   # [{name, uri}]
+
+
 @app.post("/api/orgs/{org}/members/{name}/dm")
-async def member_dm(org: str, name: str, body: SecretaryChatRequest) -> dict[str, Any]:
+async def member_dm(org: str, name: str, body: DMRequest) -> dict[str, Any]:
     """私聊成员（全权调教通道）：对话历史在群 dm-<name>，回复经 WS 推送。
 
     成员工作中时消息会排队，等其交付后回复（worker 单线程，人在忙）。
@@ -851,7 +904,7 @@ async def member_dm(org: str, name: str, body: SecretaryChatRequest) -> dict[str
     office = await hub.office(org)
     if name not in office._adapters:
         raise HTTPException(409, f"成员 {name} 不在运行中——先让其加入")
-    task = asyncio.create_task(office.dm(name, text))
+    task = asyncio.create_task(office.dm(name, text, attachments=body.attachments))
     hub.track(f"dm-{org}-{name}-{uuid.uuid4().hex[:4]}", task)
     return {"status": "ok", "group_id": f"dm-{name}"}
 

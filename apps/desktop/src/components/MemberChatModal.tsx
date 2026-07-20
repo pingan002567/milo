@@ -14,6 +14,7 @@ export function MemberChatView({ org, member, liveEvents }: {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const gid = `dm-${member}`;
 
   useEffect(() => {
@@ -33,6 +34,12 @@ export function MemberChatView({ org, member, liveEvents }: {
   }, [history, liveEvents, gid]);
 
   const turns = useMemo(() => buildTurns(events), [events]);
+  // 末回合是 thinking = 对方正在跑：此时发送键变「停止」
+  const streaming = turns.length > 0 && turns[turns.length - 1].kind === "thinking";
+
+  const stop = async () => {
+    await api.stopTurn(org, member).catch(() => {});
+  };
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [turns.length,
     turns[turns.length - 1]?.kind === "thinking"
@@ -43,7 +50,12 @@ export function MemberChatView({ org, member, liveEvents }: {
     if (!text || sending) return;
     setInput(""); setSending(true);
     try {
-      await api.memberDM(org, member, text);
+      let atts: Array<{ name: string; uri: string }> = [];
+      if (files.length) {
+        atts = await Promise.all(files.map((f) => api.uploadFile(org, f)));
+        setFiles([]);
+      }
+      await api.memberDM(org, member, text, atts.length ? atts : undefined);
     } catch (e: any) {
       setHistory((prev) => [...prev, {
         event_id: `local-${Date.now()}`, group_id: gid, type: "chat",
@@ -73,17 +85,36 @@ export function MemberChatView({ org, member, liveEvents }: {
             </div>
           </div>
         )}
-        <TurnList turns={turns} />
+        <TurnList turns={turns} onRate={(eid, r) => api.feedback(org, gid, eid, r).catch(() => {})} />
         <div ref={endRef} />
       </div>
 
-      <div className="composer seccomposer">
+      {files.length > 0 && (
+        <div className="attachbar">
+          {files.map((f, i) => (
+            <span key={i} className="chip">
+              📎 {f.name}
+              <button className="capx" onClick={() => setFiles(files.filter((_, j) => j !== i))}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="composer seccomposer"
+           onDragOver={(e) => e.preventDefault()}
+           onDrop={(e) => {
+             e.preventDefault();
+             setFiles([...files, ...Array.from(e.dataTransfer.files)]);
+           }}>
         <input placeholder={`跟 ${member} 说点什么…（Enter 发送）`} value={input}
                onChange={(e) => setInput(e.target.value)}
                onKeyDown={(e) => e.key === "Enter" && send()} />
-        <button className="btn primary" disabled={sending || !input.trim()} onClick={send}>
-          {sending ? "发送中…" : "发送"}
-        </button>
+        {streaming ? (
+          <button className="btn stopbtn" onClick={stop} title="停止当前回合">■ 停止</button>
+        ) : (
+          <button className="btn primary" disabled={sending || !input.trim()} onClick={send}>
+            {sending ? "发送中…" : "发送"}
+          </button>
+        )}
       </div>
     </div>
   );

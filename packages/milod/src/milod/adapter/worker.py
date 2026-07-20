@@ -19,6 +19,11 @@ from milod.adapter.normalize import iter_normalized
 from milod.adapter.protocol import EventFrame, Request, Response, decode_line, encode
 
 
+#: 对话通道（秘书 chat / 私聊 dm）不开 plan_mode，任务通道（t-xxx）才开
+def _is_task(task_id: str) -> bool:
+    return task_id not in ("chat", "dm")
+
+
 def _emit(obj) -> None:
     sys.stdout.write(encode(obj) + "\n")
     sys.stdout.flush()
@@ -30,6 +35,7 @@ class Worker:
         self._member: str = ""   # 显示名（可中文，用于事件 actor）
         self._agent: str = ""    # harness 运行名（ASCII slug）
         self._threads: dict[str, str] = {}
+        self._cancelled: set[str] = set()
 
     # ---- 方法 ----------------------------------------------------------
     def enroll(self, params: dict) -> dict:
@@ -53,7 +59,7 @@ class Worker:
         prompt = params["prompt"]
         thread_id = self._threads.setdefault(task_id, f"{self._agent}-{task_id}")
         self._inject_inputs(thread_id, params.get("inputs") or [])
-        self._pump(task_id, prompt, thread_id)
+        self._pump(task_id, prompt, thread_id, plan_mode=_is_task(task_id))
         return {"task_id": task_id, "thread_id": thread_id}
 
     def _inject_inputs(self, thread_id: str, inputs: list[dict]) -> None:
@@ -83,7 +89,8 @@ class Worker:
         """组长答复后恢复被 ask_clarification 中断的任务（同 thread + checkpointer）。"""
         task_id = params["task_id"]
         thread_id = self._threads.get(task_id, f"{self._agent}-{task_id}")
-        self._pump(task_id, params["answer"], thread_id)
+        self._inject_inputs(thread_id, params.get("inputs") or [])
+        self._pump(task_id, params["answer"], thread_id, plan_mode=_is_task(task_id))
         return {"task_id": task_id, "resumed": True}
 
     def deliver(self, params: dict) -> dict:
@@ -125,14 +132,58 @@ class Worker:
         except Exception:  # noqa: BLE001 —— 无 checkpointer 也能跑单轮，降级不阻断
             return None
 
-    def _pump(self, task_id: str, message: str, thread_id: str) -> None:
-        for frame in iter_normalized(
-            self._client.stream(message, thread_id=thread_id), task_id=task_id
-        ):
-            _emit(frame)
+    def cancel(self, params: dict) -> dict:
+        """停止当前回合。**只置标志、不跨线程 close 生成器**——
+
+        cancel 由 stdin 读线程就地处理（主线程正阻塞在 _pump 的流式循环里，
+        否则请求根本读不到）；而在别的线程对正在执行的生成器调 close()
+        会抛 "generator already executing"。所以由 _pump 自己在下一次
+        迭代时看到标志并收尾（流式 token 很密集，感知延迟极小）。
+        """
+        task_id = params.get("task_id") or ""
+        self._cancelled.add(task_id)
+        print(f"[cancel] mark {task_id!r}", file=sys.stderr, flush=True)
+        return {"task_id": task_id, "cancelled": True}
+
+    def _pump(self, task_id: str, message: str, thread_id: str,
+              *, plan_mode: bool = False) -> None:
+        """plan_mode 按通道开关（实测结论）：
+
+        TodoMiddleware 不只是"给个计划工具"——它会**阻止 agent 在 todo 未完成时
+        退出循环**（未完成就跳回 model 节点继续）。这对任务执行是好事（别烂尾），
+        但对私聊/秘书对话是灾难：问一句话它要走完整个计划，还与"停止"直接冲突。
+        所以任务通道开、对话通道关。
+        """
+        self._cancelled.discard(task_id)
+        gen = self._client.stream(message, thread_id=thread_id, plan_mode=plan_mode)
+        aborted = False
+        try:
+            for frame in iter_normalized(gen, task_id=task_id):
+                _emit(frame)
+                if task_id in self._cancelled:
+                    aborted = True
+                    break
+        except GeneratorExit:
+            aborted = True
+        finally:
+            if aborted:
+                self._cancelled.discard(task_id)
+                try:
+                    gen.close()  # 同线程收尾，安全
+                except Exception:  # noqa: BLE001
+                    pass
+                # 补一帧终局，避免调用方无限等待
+                _emit(EventFrame(event="system", task_id=task_id,
+                                 payload={"aborted": True, "msg": "已停止"}))
 
     # ---- 主循环 --------------------------------------------------------
     def serve(self) -> None:
+        """读线程 + 主线程分离：assign/resume 会长时间阻塞在流式循环里，
+        若在同一线程读 stdin，期间的 cancel 请求永远读不到（停不下来）。
+        """
+        import queue
+        import threading
+
         handlers = {
             "enroll": self.enroll,
             "assign": self.assign,
@@ -140,10 +191,25 @@ class Worker:
             "deliver": self.deliver,
             "ping": lambda p: {"pong": True},
         }
-        for line in sys.stdin:
-            msg = decode_line(line)
-            if not isinstance(msg, Request):
-                continue
+        q: queue.Queue = queue.Queue()
+
+        def reader() -> None:
+            for line in sys.stdin:
+                msg = decode_line(line)
+                if not isinstance(msg, Request):
+                    continue
+                if msg.method == "cancel":
+                    # 就地处理：主线程可能正卡在流式循环中
+                    _emit(Response(id=msg.id, result=self.cancel(msg.params)))
+                    continue
+                q.put(msg)
+            q.put(None)
+
+        threading.Thread(target=reader, daemon=True).start()
+        while True:
+            msg = q.get()
+            if msg is None:
+                return
             if msg.method == "shutdown":
                 _emit(Response(id=msg.id, result={"bye": True}))
                 return

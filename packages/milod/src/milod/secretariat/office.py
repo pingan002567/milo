@@ -269,15 +269,27 @@ class Office:
             assigned.append(member)
         return assigned
 
-    async def dm(self, name: str, text: str) -> None:
-        """老板私聊成员（全权调教通道）：独立线程、共享实例记忆，不承载任务。"""
+    async def dm(self, name: str, text: str,
+                 *, attachments: list[dict] | None = None) -> None:
+        """老板私聊成员（全权调教通道）：独立线程、共享实例记忆，不承载任务。
+
+        attachments：把资料注入该私聊线程的 uploads 目录，成员可 read_file 读。
+        """
         if name not in self._adapters:
             raise KeyError(f"成员 {name} 不在运行中——先让其加入")
         gid = f"dm-{name}"
         self.store.ensure_group(gid, title=f"私聊 · {name}")
         self._emit(MiloEvent(
-            group_id=gid, type=EventType.CHAT, actor="owner", payload={"text": text}))
-        await self._adapters[name].chat(text, group_id=gid, channel="dm")
+            group_id=gid, type=EventType.CHAT, actor="owner",
+            payload={"text": text, "attachments": attachments or []}))
+        await self._adapters[name].chat(text, group_id=gid, channel="dm",
+                                        attachments=attachments)
+
+    async def cancel(self, member: str, task_id: str) -> None:
+        """停止某成员当前回合（私聊或任务）。"""
+        if member in self._adapters:
+            await self._adapters[member].cancel(task_id)
+            self._busy.discard(member)
 
     async def reply(self, task_id: str, answer: str) -> None:
         """组长答复被中断的任务 → resume 接续。"""
@@ -336,6 +348,11 @@ class Office:
                             actor=member, payload={"text": text}))
                 elif ev.type == EventType.STATUS:
                     self._emit(ev)
+                elif ev.type == EventType.SYSTEM and ev.payload.get("aborted"):
+                    # 用户点了停止：对话流里要给出终局，否则界面一直"正在输入"
+                    self._emit(MiloEvent(
+                        group_id=ev.group_id, type=EventType.CHAT, actor=member,
+                        payload={"text": "（已停止）", "aborted": True}))
                 continue
             if ev.task_id:
                 if ev.type == EventType.ESCALATION:

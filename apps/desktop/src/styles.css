@@ -531,3 +531,28 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 .dragbar { height: 22px; margin: -20px -24px 0; }
 .gchead { -webkit-user-select: none; user-select: none; }
 .gchead b, .gcsub { -webkit-user-select: text; user-select: text; }
+
+/* TODO 清单 / 引用 / 用量 / 停止 / 附件 */
+.todopanel { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px;
+  background: var(--panel); overflow: hidden; }
+.todohead { display: flex; align-items: center; gap: 8px; width: 100%; border: none;
+  background: var(--panel-2); color: var(--ink-2); padding: 6px 11px; font-size: 12px;
+  cursor: pointer; }
+.todohead span:last-child { margin-left: auto; }
+.todolist { list-style: none; margin: 0; padding: 6px 11px; font-size: 12.5px; }
+.todolist li { display: flex; gap: 7px; padding: 3px 0; color: var(--ink-2); }
+.todolist li.done { color: var(--ink-3); text-decoration: line-through; }
+.todolist li.doing { color: var(--ink); font-weight: 600; }
+.tdmark { flex: none; width: 12px; }
+.todolist li.done .tdmark { color: var(--green); }
+.todolist li.doing .tdmark { color: var(--amber); }
+.cites { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cite { font-size: 11px; color: var(--pine); border: 1px solid var(--line);
+  border-radius: 999px; padding: 2px 9px; text-decoration: none; }
+.cite:hover { border-color: var(--pine); }
+.tokens { font-family: var(--mono); font-size: 10.5px; color: var(--faint); align-self: center; }
+.btn.stopbtn { color: var(--crit); border-color: var(--crit-soft); font-weight: 600; }
+.btn.stopbtn:hover { border-color: var(--crit); }
+.attachbar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.msgcopy.fb { padding: 2px 6px; }
+.msgcopy.fb.on { border-color: var(--pine); color: var(--pine); }

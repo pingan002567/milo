@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import ast
 import json
 import re
 from collections.abc import Iterable, Iterator
@@ -121,6 +122,45 @@ def parse_marker_escalation(text: str) -> dict[str, Any] | None:
         return None
 
 
+def _extract_todos(data: dict[str, Any]) -> list[dict] | None:
+    """从 custom 载荷 / write_todos 工具结果里抽出 TODO 列表。
+
+    形状按 langchain TodoListMiddleware 契约兼容多种嵌套（todos / data.todos / content JSON）。
+    """
+    for key in ("todos", "todo", "items"):
+        v = data.get(key)
+        if isinstance(v, list) and v:
+            return [_norm_todo(x) for x in v if isinstance(x, dict)]
+    inner = data.get("data") if isinstance(data.get("data"), dict) else None
+    if inner:
+        return _extract_todos(inner)
+    raw = data.get("content")
+    if isinstance(raw, str) and raw.strip():
+        # write_todos 的 ToolMessage 正文形如：
+        #   Updated todo list to [{'content': '…', 'status': 'pending'}]
+        # 是 **Python repr 不是 JSON**（单引号），json.loads 解不了
+        m = re.search(r"\[\s*\{.*\}\s*\]", raw, re.S)
+        if m:
+            for loader in (json.loads, ast.literal_eval):
+                try:
+                    v = loader(m.group(0))
+                    if isinstance(v, list) and v:
+                        return [_norm_todo(x) for x in v if isinstance(x, dict)]
+                except Exception:  # noqa: BLE001
+                    continue
+    return None
+
+
+def _norm_todo(x: dict) -> dict:
+    return {"content": str(x.get("content") or x.get("title") or x.get("task") or "")[:200],
+            "status": str(x.get("status") or "pending")}
+
+
+def _todo_summary(todos: list[dict]) -> str:
+    done = sum(1 for t in todos if t.get("status") in ("completed", "done"))
+    return f"计划 {done}/{len(todos)} 项完成"
+
+
 def iter_normalized(
     stream: Iterable[Any], *, task_id: str, status_min_chars: int = 120
 ) -> Iterator[EventFrame]:
@@ -178,11 +218,37 @@ def iter_normalized(
             pending_escalation = False
             continue
 
+        # custom 通道：harness 的结构化进展载体（stream_mode 含 "custom"）——
+        # TODO 清单、子代理状态等。此前整个丢弃，等于扔掉了现成的进度信号。
+        if etype == "custom":
+            todos = _extract_todos(data)
+            if todos is not None:
+                yield from flush_status()
+                yield EventFrame(event="status", task_id=task_id,
+                                 payload={"kind": "todo", "todos": todos,
+                                          "doing": _todo_summary(todos)})
+                continue
+            sub = data.get("subagent") or data.get("task")
+            if isinstance(sub, dict) and sub.get("name"):
+                yield EventFrame(event="status", task_id=task_id,
+                                 payload={"kind": "subagent", "subagent": sub,
+                                          "doing": f"子代理 {sub.get('name')}："
+                                                   f"{str(sub.get('status') or '')}"})
+            continue
+
         # 工具执行完成（ToolMessage，非澄清）= 结构化汇报：一次调用一条，
         # 有信息量、可被秘书理解——与 token 级 trace 流严格分开
         if (etype == "messages-tuple" and data.get("type") == "tool"
                 and data.get("name") and data.get("name") != "ask_clarification"):
             yield from flush_status()
+            if data.get("name") in ("write_todos", "todo_write"):
+                todos = _extract_todos(data)
+                if todos is not None:
+                    yield from flush_status()
+                    yield EventFrame(event="status", task_id=task_id,
+                                     payload={"kind": "todo", "todos": todos,
+                                              "doing": _todo_summary(todos)})
+                    continue
             snippet = str(data.get("content") or "")[:80].replace("\n", " ")
             yield EventFrame(
                 event="status", task_id=task_id,
@@ -222,10 +288,13 @@ def iter_normalized(
                     {"question": last_text[:400] or "成员请求澄清（载荷不完整）"})
             if held is not None:
                 yield EventFrame(event="escalation", task_id=task_id, payload=held)
+            usage = data.get("usage", {}) or {}
             yield EventFrame(
                 event="system",
                 task_id=task_id,
-                payload={"usage": data.get("usage", {}), "interrupted": held is not None},
+                payload={"usage": usage, "interrupted": held is not None,
+                         # 供 UI 直接显示本轮消耗（此前只落库从不展示）
+                         "tokens": usage.get("total_tokens")},
             )
             if held is None:
                 yield EventFrame(
