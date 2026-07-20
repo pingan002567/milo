@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GroupView } from "./components/GroupView";
+import { Inspector } from "./components/Inspector";
 import { MarketView } from "./components/MarketView";
 import { OrgView } from "./components/OrgView";
 import { RosterView } from "./components/RosterView";
@@ -36,6 +37,7 @@ export default function App() {
   const [secEvents, setSecEvents] = useState<MiloEvent[]>([]);  // 秘书对话实时流
   const [dmTarget, setDmTarget] = useState<string | null>(null);   // 私聊对象
   const [dms, setDms] = useState<{ group_id: string; member: string }[]>([]);  // 私聊会话列表
+  const [inspOpen, setInspOpen] = useState(() => localStorage.getItem("milo.insp") !== "0");
   const [dmEvents, setDmEvents] = useState<MiloEvent[]>([]);       // 私聊实时流
   const seen = useRef(new Set<string>());
 
@@ -111,6 +113,18 @@ export default function App() {
   // 用 ref 让 WS 回调读到最新选中的群
   const gidRef = useRef<string | null>(null);
   useEffect(() => { gidRef.current = gid; }, [gid]);
+
+  // Cmd+\ 折叠右栏检查器（状态持久化）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+        e.preventDefault();
+        setInspOpen((v) => { localStorage.setItem("milo.insp", v ? "0" : "1"); return !v; });
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   // 点击系统通知（或点击后激活窗口）→ 直达对应任务群
   useEffect(() => { onNotificationOpen(openGroup); }, [openGroup]);
@@ -255,40 +269,19 @@ export default function App() {
       </main>
 
       {/* ── 右栏：检查器 ── */}
-      <aside className="inspector">
-        {screen === "group" && gid ? (
-          <>
-            <div className="ihead">任务群</div>
-            <dl className="ikv">
-              <dt>ID</dt><dd>{gid}</dd>
-              <dt>状态</dt><dd>{gstatus}</dd>
-              <dt>事件</dt><dd>{events.length}</dd>
-            </dl>
-            <div className="ihead">任务</div>
-            {tasks.map((t) => (
-              <div key={t.task_id} style={{ fontSize: 12.5, padding: "5px 0", borderBottom: "1px dashed var(--line)" }}>
-                <div>{t.task_id} <span className={`chip ${t.state === "input_required" ? "warn" : t.state === "accepted" ? "ok" : ""}`}>{t.state}</span></div>
-                <div className="muted">{t.member} · {t.attempts} 轮执行{t.stop_reason ? ` · ${t.stop_reason}` : ""}</div>
-              </div>
-            ))}
-          </>
-        ) : (
-          <>
-            <div className="ihead">成员</div>
-            {members.map((m) => (
-              <div key={m.name} style={{ fontSize: 12.5, padding: "5px 0" }}>
-                <b>{m.name}</b>
-                <div className="muted">{m.capabilities.join("、")}</div>
-              </div>
-            ))}
-            <div className="ihead">说明</div>
-            <div className="muted">
-              秘书是系统角色（≈办公室主任），不是成员：分解任务、按能力派单、汇总汇报、
-              只在需要拍板时打扰你。人事决定权只属于你。
-            </div>
-          </>
-        )}
-      </aside>
+      {inspOpen ? (
+        <aside className="inspector">
+          <button className="inspfold" title="折叠检查器 (⌘\\)"
+                  onClick={() => { setInspOpen(false); localStorage.setItem("milo.insp", "0"); }}>›</button>
+          <Inspector screen={screen} org={ORG} gid={gid} gstatus={gstatus} events={events}
+                     tasks={tasks} secEvents={secEvents} dmTarget={dmTarget} todos={todos}
+                     members={members} groups={groups}
+                     onChanged={refreshLists} onOpenGroup={openGroup} />
+        </aside>
+      ) : (
+        <button className="inspshow" title="展开检查器 (⌘\\)"
+                onClick={() => { setInspOpen(true); localStorage.setItem("milo.insp", "1"); }}>‹</button>
+      )}
 
       <SettingsModal org={ORG} open={settingsOpen} connected={conn === "open"}
                      onClose={() => setSettingsOpen(false)} />

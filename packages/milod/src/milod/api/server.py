@@ -215,6 +215,26 @@ async def secretary_chat(org: str, body: SecretaryChatRequest) -> dict[str, Any]
     return {"status": "ok"}
 
 
+@app.get("/api/orgs/{org}/members/{name}/tasks")
+async def member_tasks(org: str, name: str) -> dict[str, Any]:
+    """某成员名下的任务（右栏成员名片用），最近在前。"""
+    office = await hub.office(org)
+    rows = [t for t in office.store.tasks() if t["member"] == name]
+    rows.sort(key=lambda t: t["updated_at"], reverse=True)
+    return {"tasks": rows[:20]}
+
+
+@app.get("/api/orgs/{org}/org-yaml")
+async def org_yaml_raw(org: str) -> dict[str, Any]:
+    """org.yaml 原文（名册页右栏：文件是事实源，界面只是编辑器）。"""
+    from milod.config.paths import org_dir
+
+    f = org_dir(org) / "org.yaml"
+    if not f.is_file():
+        raise HTTPException(404, f"{org} 没有 org.yaml")
+    return {"content": f.read_text(encoding="utf-8")}
+
+
 @app.get("/api/orgs/{org}/dms")
 async def list_dms(org: str) -> dict[str, Any]:
     """私聊会话列表（左栏「私聊」区块）：每名聊过的成员一条。"""

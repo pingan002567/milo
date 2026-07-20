@@ -210,6 +210,12 @@ export const api = {
     fetch(`/api/orgs/${org}/members/${name}${force ? "?force=true" : ""}`, { method: "DELETE" })
       .then(j) as Promise<{ name: string; status: string }>,
 
+  tasksOf: (org: string, name: string): Promise<{ tasks: TaskRow[] }> =>
+    fetch(`/api/orgs/${org}/members/${name}/tasks`).then(j),
+
+  orgYaml: (org: string): Promise<{ content: string }> =>
+    fetch(`/api/orgs/${org}/org-yaml`).then(j),
+
   dms: (org: string): Promise<{ dms: (GroupSummary & { member: string })[] }> =>
     fetch(`/api/orgs/${org}/dms`).then(j),
 
