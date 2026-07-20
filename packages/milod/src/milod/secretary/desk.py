@@ -50,6 +50,9 @@ class SecretaryDesk:
                 secrets=secrets,
                 extra_tools=MILO_TOOLS,
                 workdir=org_dir(self.org) / "secretary",
+                # 系统组件的权限固定（readonly/禁网/无 bash），不随本地默认设置走
+                snapshot={"permissions": {"network": [], "filesystem": "readonly",
+                                          "python_repl": False}},
             )
             # 工具经本地回环调 milod API：权限面恒等于 API 面
             spec.extra_env = {"MILO_API_BASE": self._api_base, "MILO_ORG": self.org}

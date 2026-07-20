@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type PackInfo, type Permissions } from "../lib/api";
+import { api, type PackInfo } from "../lib/api";
 
 /** 质检徽章：实测（本机复跑）与自报（作者声明）分开呈现——信任来自复跑。 */
 function EvalBadge({ p }: { p: PackInfo }) {
@@ -21,15 +21,6 @@ function EvalBadge({ p }: { p: PackInfo }) {
     );
   }
   return null;
-}
-
-/** 权限摘要——包声明得越收敛，用户越少被打扰（招聘时最该看的一行）。 */
-function permText(p?: Permissions): string {
-  if (!p) return "未声明权限";
-  const net = !p.network?.length ? "无外网"
-    : p.network.includes("*") ? "外网开放" : `外网 ${p.network.length} 域名`;
-  return [net, p.filesystem === "readonly" ? "文件只读" : "文件读写",
-          p.python_repl ? "可执行代码（沙箱）" : "无代码执行"].join(" · ");
 }
 
 export function MarketView({ onChanged }: { onChanged: () => void }) {
@@ -94,10 +85,9 @@ export function MarketView({ onChanged }: { onChanged: () => void }) {
                   ))}
                 </div>
                 <div className="muted" style={{ minHeight: 34 }}>{p.description}</div>
-                <div className="qc">
-                  🔒 {permText(p.permissions)}
-                  {p.model_requirements?.min_tier && ` · 需 ${p.model_requirements.min_tier} 档模型`}
-                </div>
+                {p.model_requirements?.min_tier && (
+                  <div className="qc">需 {p.model_requirements.min_tier} 档模型</div>
+                )}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
                   <span className="muted">{p.author}</span>
                   <button className={`btn sm star ${p.starred ? "on" : ""}`} style={{ marginLeft: "auto" }}

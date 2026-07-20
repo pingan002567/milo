@@ -69,7 +69,7 @@ export interface PackInfo {
   /** 已收藏（只记引用，不占磁盘） */
   starred?: boolean;
   capabilities?: { id: string; description: string }[];
-  permissions?: Permissions; model_requirements?: { min_tier?: string; context_window?: string };
+  model_requirements?: { min_tier?: string; context_window?: string };
   eval?: { suite?: string; min_score?: number };
   /** 本机实测报告（milo eval）；null/缺失 = 未实测，只有作者自报门槛 */
   eval_report?: {
@@ -80,7 +80,7 @@ export interface PackInfo {
 }
 export interface LibraryItem {
   ref: string; name?: string; version?: string; description?: string;
-  capabilities?: string[]; permissions?: Permissions;
+  capabilities?: string[];
   /** 引用该模板的公司（非空则禁删） */
   used_by?: string[];
   error?: string;
@@ -165,6 +165,15 @@ export const api = {
   testBindings: (org: string) =>
     fetch(`/api/orgs/${org}/bindings/test`, { method: "POST" })
       .then(j) as Promise<{ ok: boolean; model?: string; latency_ms?: number; error?: string }>,
+
+  getDefaults: () =>
+    fetch(`/api/settings/defaults`).then(j) as Promise<{ permissions: Permissions }>,
+
+  putDefaults: (permissions: Permissions) =>
+    fetch(`/api/settings/defaults`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ permissions }),
+    }).then(j) as Promise<{ permissions: Permissions; note: string }>,
 
   putSecret: (envName: string, value: string) =>
     fetch(`/api/secrets/${envName}`, {

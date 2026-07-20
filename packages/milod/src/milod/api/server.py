@@ -154,6 +154,26 @@ async def test_bindings(org: str) -> dict[str, Any]:
             "latency_ms": int((time.monotonic() - t0) * 1000)}
 
 
+class DefaultsUpdate(BaseModel):
+    permissions: dict[str, Any]
+
+
+@app.get("/api/settings/defaults")
+async def get_defaults() -> dict[str, Any]:
+    """本地默认设置：新招募成员的初始权限（已有成员不受影响）。"""
+    from milod.config.defaults import load_default_permissions
+
+    return {"permissions": load_default_permissions()}
+
+
+@app.put("/api/settings/defaults")
+async def put_defaults(body: DefaultsUpdate) -> dict[str, Any]:
+    from milod.config.defaults import save_default_permissions
+
+    return {"permissions": save_default_permissions(body.permissions),
+            "note": "已保存；只影响之后招募的成员"}
+
+
 @app.put("/api/secrets/{env_name}")
 async def put_secret(env_name: str, body: SecretUpdate) -> dict[str, Any]:
     """密钥入 OS 钥匙串（keyring service=milo）。零落盘、不回显、不入日志。"""
@@ -398,7 +418,6 @@ async def market() -> dict[str, Any]:
                 "description": mf.get("description"),
                 "capabilities": [{"id": c["id"], "description": c.get("description", "")}
                                  for c in mf.get("capabilities", [])],
-                "permissions": mf.get("permissions", {}),
                 "model_requirements": mf.get("model_requirements", {}),
                 "eval": mf.get("eval", {}),
                 "downloaded": ref in downloaded,
@@ -445,7 +464,6 @@ async def list_library() -> dict[str, Any]:
                 "version": mf.get("version"),
                 "description": mf.get("description"),
                 "capabilities": [c["id"] for c in mf.get("capabilities", [])],
-                "permissions": mf.get("permissions", {}),
                 "used_by": used.get(d.name, []),  # 引用它的公司（禁删依据）
             })
     return {"library": items}
@@ -569,6 +587,7 @@ async def enroll_member(org: str, body: EnrollRequest) -> dict[str, Any]:
 
     # 实例化即拷贝（§3.5 修正）：能力/权限/描述快照进实例记录，从此归实例所有
     # （可编辑），与模板脱钩——模板后续升级/删除都不影响该成员
+    from milod.config.defaults import load_default_permissions
     from milod.pack.renderer import derive_slug
 
     members.append({
@@ -577,7 +596,9 @@ async def enroll_member(org: str, body: EnrollRequest) -> dict[str, Any]:
         "slug": derive_slug(name, str(mf.get("name") or "member")),
         "description": mf.get("description", ""),
         "capabilities": [c["id"] for c in mf.get("capabilities", [])],
-        "permissions": mf.get("permissions", {}) or {},
+        # 权限是本地环境的属性（2026-07-20 决策）：初始值取本地默认设置，
+        # 与模板无关；之后在成员详情/私聊里逐个调整
+        "permissions": load_default_permissions(),
     })
     f.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
 

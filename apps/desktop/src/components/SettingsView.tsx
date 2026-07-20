@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, type Permissions } from "../lib/api";
 import { useThemeMode } from "../lib/theme";
 
 /**
@@ -81,6 +81,8 @@ function GeneralTab({ org }: { org: string }) {
         </SettingRow>
       </SectionCard>
 
+      <DefaultPermissionsCard />
+
       <SectionCard title="工作区" description="当前团队与数据目录；切换团队在左栏顶部">
         <SettingRow label="当前团队">
           <span className="mono" style={{ fontSize: 12 }}>{org}</span>
@@ -95,6 +97,78 @@ function GeneralTab({ org }: { org: string }) {
         </SettingRow>
       </SectionCard>
     </div>
+  );
+}
+
+/** 默认权限（2026-07-20 决策：权限是本地环境的属性，不是包的属性）。 */
+function DefaultPermissionsCard() {
+  const [net, setNet] = useState("");
+  const [fs, setFs] = useState("workspace");
+  const [repl, setRepl] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.getDefaults().then((r) => {
+      setNet((r.permissions.network ?? []).join(", "));
+      setFs(r.permissions.filesystem ?? "workspace");
+      setRepl(Boolean(r.permissions.python_repl));
+    }).catch(() => setMsg("读取默认权限失败"));
+  }, []);
+
+  const save = async () => {
+    setMsg(null);
+    try {
+      const permissions: Permissions = {
+        network: net.split(/[,，\s]+/).map((s) => s.trim()).filter(Boolean),
+        filesystem: fs,
+        python_repl: repl,
+      };
+      const r = await api.putDefaults(permissions);
+      setDirty(false);
+      setMsg(r.note);
+    } catch (e: any) {
+      setMsg(`保存失败：${String(e?.message ?? e).slice(0, 120)}`);
+    }
+  };
+
+  return (
+    <SectionCard title="默认权限" subtitle="新成员初始值"
+      description="新招募成员的初始权限；已有成员不受影响，可在成员详情单独调整">
+      <div style={{ display: "grid", gap: 10 }}>
+        <label>
+          <span className="field-label">外网域名白名单（逗号分隔；留空 = 禁外网）</span>
+          <input className="setting-input" value={net}
+                 onChange={(e) => { setNet(e.target.value); setDirty(true); }}
+                 placeholder="如 *.arxiv.org" />
+        </label>
+        <div className="setting-row">
+          <div className="setting-row-main"><div className="setting-row-label">文件权限</div></div>
+          <div className="setting-row-ctl">
+            <div className="seg-ctl">
+              {([["readonly", "只读"], ["workspace", "读写工作区"]] as const).map(([v, label]) => (
+                <button key={v} type="button" className={fs === v ? "on" : ""}
+                        onClick={() => { setFs(v); setDirty(true); }}>{label}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="setting-row">
+          <div className="setting-row-main">
+            <div className="setting-row-label">代码执行（host bash）</div>
+            <div className="setting-row-sub">实质上的总开关——默认建议保持关闭，按成员单独放开</div>
+          </div>
+          <div className="setting-row-ctl">
+            <input type="checkbox" checked={repl}
+                   onChange={(e) => { setRepl(e.target.checked); setDirty(true); }} />
+          </div>
+        </div>
+        {dirty && (
+          <div><button className="btn primary sm" onClick={save}>保存默认权限</button></div>
+        )}
+        {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
+      </div>
+    </SectionCard>
   );
 }
 

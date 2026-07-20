@@ -142,8 +142,15 @@ def render(
         encoding="utf-8",
     )
 
-    # 3) 运行时 config.yaml（permissions 收敛在此落地）
-    perms = snapshot.get("permissions") or manifest.get("permissions", {}) or {}
+    # 3) 运行时 config.yaml（permissions 收敛在此落地）。
+    # 权限是本地环境的属性：实例快照优先，缺失回退本地默认设置——
+    # 模板 manifest 的 permissions 已废弃不读（旧包带着也忽略）
+    if snapshot.get("permissions"):
+        perms = snapshot["permissions"]
+    else:
+        from milod.config.defaults import load_default_permissions
+
+        perms = load_default_permissions()
     provider = model.get("provider", "openai")
     cfg: dict[str, Any] = {
         "config_version": 26,

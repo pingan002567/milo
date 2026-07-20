@@ -3,32 +3,72 @@
   "$id": "https://milo.dev/schemas/milopack/v1",
   "title": "MiloPack manifest v0",
   "type": "object",
-  "required": ["apiVersion", "name", "version", "capabilities", "permissions"],
+  "required": [
+    "apiVersion",
+    "name",
+    "version",
+    "capabilities"
+  ],
   "additionalProperties": false,
   "properties": {
-    "apiVersion": { "const": "milopack/v1" },
-    "name": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" },
-    "version": { "type": "string", "description": "semver" },
-    "author": { "type": "string" },
-    "license": { "type": "string" },
-    "description": { "type": "string" },
+    "apiVersion": {
+      "const": "milopack/v1"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "version": {
+      "type": "string",
+      "description": "semver"
+    },
+    "author": {
+      "type": "string"
+    },
+    "license": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
     "deerflow": {
       "type": "object",
       "additionalProperties": false,
-      "properties": { "minVersion": { "type": "string" } }
+      "properties": {
+        "minVersion": {
+          "type": "string"
+        }
+      }
     },
     "capabilities": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "description"],
+        "required": [
+          "id",
+          "description"
+        ],
         "additionalProperties": false,
         "properties": {
-          "id": { "type": "string" },
-          "description": { "type": "string" },
-          "tags": { "type": "array", "items": { "type": "string" } },
-          "examples": { "type": "array", "items": { "type": "string" } }
+          "id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "examples": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -36,35 +76,74 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "min_tier": { "enum": ["basic", "reasoning", "vision", "code"] },
-        "context_window": { "type": "string" }
+        "min_tier": {
+          "enum": [
+            "basic",
+            "reasoning",
+            "vision",
+            "code"
+          ]
+        },
+        "context_window": {
+          "type": "string"
+        }
       }
     },
     "mcp_dependencies": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "additionalProperties": false,
-        "properties": { "name": { "type": "string" }, "required": { "type": "boolean", "default": false } }
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean",
+            "default": false
+          }
+        }
       }
     },
     "permissions": {
       "type": "object",
       "additionalProperties": false,
-      "description": "双重职责：安全边界 + 升级策略判定依据。越收敛，用户越少被打扰。",
+      "description": "已废弃（2026-07-20）：权限是本地环境的属性，实例化时取本地默认设置；此块保留仅为旧包兼容，运行时忽略。",
       "properties": {
-        "network": { "type": "array", "items": { "type": "string" }, "description": "出网域名白名单；空数组=禁外网" },
-        "filesystem": { "enum": ["readonly", "workspace"], "default": "workspace" },
-        "python_repl": { "type": "boolean", "default": false }
+        "network": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "出网域名白名单；空数组=禁外网"
+        },
+        "filesystem": {
+          "enum": [
+            "readonly",
+            "workspace"
+          ]
+        },
+        "python_repl": {
+          "type": "boolean"
+        }
       }
     },
     "eval": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "suite": { "type": "string", "default": "evals/" },
-        "min_score": { "type": "number", "minimum": 0, "maximum": 5 }
+        "suite": {
+          "type": "string",
+          "default": "evals/"
+        },
+        "min_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5
+        }
       }
     }
   }
