@@ -13,7 +13,7 @@ import yaml
 from milod.adapter.base import MemberSpec
 from milod.adapter.subprocess_adapter import SubprocessAdapter
 from milod.config.paths import artifacts_dir, org_dir, resolve_member_source
-from milod.models import EventType, MiloEvent, TaskEnvelope, TaskState
+from milod.models import EventType, MiloEvent, Reach, TaskEnvelope, TaskState
 from milod.pack.renderer import render
 from milod.secretariat import acceptance
 from milod.secretariat.decompose import Roster, build_prompt, parse_plan
@@ -41,14 +41,26 @@ class Office:
             group_id=group_id, type=EventType.CHAT, actor="owner", payload={"text": request}))
 
     def sync_group_status(self, group_id: str) -> None:
-        """按任务终局收口群状态：有待决→waiting，全终态→archived。"""
+        """按任务终局收口群状态：有待决→waiting，全终态→**review（待你确认）**。
+
+        秘书的验收只是初筛（产物在不在、格式对不对）；"这活儿办得对不对"
+        由用户确认才算终局（验收与返工设计 §一）——所以全终态不再直接归档。
+        """
         tasks = self.store.tasks(group_id)
         if not tasks:
             return
         if any(t["state"] == "input_required" for t in tasks):
             self.store.set_group_status(group_id, "waiting")
         elif all(t["state"] in {"accepted", "rejected", "failed", "canceled"} for t in tasks):
-            self.store.set_group_status(group_id, "archived")
+            cur = next((g["status"] for g in self.store.groups()
+                        if g["group_id"] == group_id), None)
+            if cur not in ("review", "archived"):
+                self.store.enter_review(group_id)
+                self._emit(MiloEvent(
+                    group_id=group_id, type=EventType.SYSTEM, actor="secretariat",
+                    reach=Reach.MENTION,
+                    payload={"msg": "任务已完成，等你确认验收",
+                             "awaiting_confirm": True}))
         else:
             self.store.set_group_status(group_id, "active")
 

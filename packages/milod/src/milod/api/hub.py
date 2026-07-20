@@ -10,7 +10,7 @@ from typing import Any
 import yaml
 
 from milod.config.paths import org_dir
-from milod.models import EventType, MiloEvent, TaskState
+from milod.models import EventType, MiloEvent, TaskEnvelope, TaskState
 from milod.secretariat.decompose import DecomposeError
 from milod.secretariat.office import Office, _read_secret, short_title
 from milod.secretariat.route import NoMemberForTask
@@ -175,6 +175,88 @@ class Hub:
                                "task_id": e.task_id} for e in envelopes], "approved": False}))
         office.store.save_pending_plan(group_id, envelopes)
         office.store.set_group_status(group_id, "waiting")
+
+    # ---- 验收确认与返工（验收与返工设计 §一）----------------------------
+    async def confirm_group(self, org: str, group_id: str, note: str = "") -> bool:
+        """确认满意 → 归档。用户确认才是验收终局，秘书的只是初筛。"""
+        office = await self.office(org)
+        cur = next((g["status"] for g in office.store.groups()
+                    if g["group_id"] == group_id), None)
+        if cur not in ("review", "archived"):
+            return False
+        office._emit(MiloEvent(
+            group_id=group_id, type=EventType.CHAT, actor="owner",
+            payload={"text": f"验收通过，归档{('：' + note) if note else ''}"}))
+        office.store.set_group_status(group_id, "archived")
+        return True
+
+    async def rework_group(self, org: str, group_id: str, feedback: str,
+                           artifacts: list[dict] | None = None) -> bool:
+        """产出不符预期：补充要求/资料，**在同一个群**重新组织执行。
+
+        不新建群、不新建任务——同一 task 新开一轮（attempts+1），
+        上一轮产物经 inputs.artifacts 回传给成员：它是"改稿"不是"从零重做"。
+        """
+        from milod.models import ArtifactRef
+
+        office = await self.office(org)
+        tasks = office.store.tasks(group_id)
+        if not tasks:
+            return False
+        # 返工目标：最后一个交付过的任务（多步计划里通常就是最终产出方）
+        target = next((t for t in reversed(tasks)
+                       if t["state"] in ("accepted", "rejected", "delivered")), None)
+        if target is None:
+            return False
+
+        env = TaskEnvelope.model_validate_json(target["envelope"])
+        env.constraints.append(f"组长返工要求（第 {target['attempts'] + 1} 轮）：{feedback}")
+        # 上一轮产物回传，成员在既有基础上改
+        prev = office.last_delivery(target["task_id"]) or {}
+        arts = [a for a in (prev.get("artifacts") or []) if a.get("uri")]
+        if arts:
+            env.inputs.artifacts = [
+                ArtifactRef(name=a["name"], uri=a["uri"], media_type=a.get("media_type"))
+                for a in arts
+            ]
+        for a in artifacts or []:  # 用户补充的资料（v0 预留，R3 支持文件上传）
+            if a.get("name") and a.get("uri"):
+                env.inputs.artifacts.append(ArtifactRef(name=a["name"], uri=a["uri"]))
+
+        office._emit(MiloEvent(
+            group_id=group_id, task_id=target["task_id"], type=EventType.CHAT,
+            actor="owner", payload={"text": feedback, "rework": True,
+                                    "round": target["attempts"] + 1}))
+        office.store.set_group_status(group_id, "active")
+        task = asyncio.create_task(self._rerun(office, env, group_id))
+        self.track(f"{group_id}-rework", task)
+        return True
+
+    async def _rerun(self, office: Office, env, group_id: str) -> None:
+        try:
+            await office.dispatch([env], group_id)
+        except NoMemberForTask as e:
+            office._emit(MiloEvent(
+                group_id=group_id, task_id=env.task_id, type=EventType.SYSTEM,
+                actor="secretariat", payload={"error": str(e)}))
+            office.store.set_group_status(group_id, "failed")
+            return
+        state = await self._await_settled(office, env.task_id)
+        if state == TaskState.DELIVERED.value:
+            await office.collect(env.task_id)
+        office.sync_group_status(group_id)
+
+    async def sweep_due_reviews(self, hours: float = 24.0) -> int:
+        """待确认超时 → 自动归档（视同满意）。后台定时 + 惰性检查双保险。"""
+        n = 0
+        for org, office in list(self._offices.items()):
+            for gid in office.store.due_reviews(hours):
+                office._emit(MiloEvent(
+                    group_id=gid, type=EventType.SYSTEM, actor="system",
+                    payload={"msg": f"待确认超过 {hours:.0f} 小时，已自动归档"}))
+                office.store.set_group_status(gid, "archived")
+                n += 1
+        return n
 
     # ---- 计划批准 ------------------------------------------------------
     async def pending_plan(self, org: str, group_id: str) -> list | None:

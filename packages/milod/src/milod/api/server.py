@@ -252,9 +252,15 @@ async def list_dms(org: str) -> dict[str, Any]:
 async def list_groups(org: str) -> dict[str, Any]:
     """左边栏任务群列表：@你 未处理的带角标（org 审计群与秘书对话群不在其列）。"""
     office = await hub.office(org)
-    return {"groups": [g for g in office.store.groups()
-                       if g["group_id"] not in ("org", "secretary")
-                       and not g["group_id"].startswith("dm-")]}
+    await hub.sweep_due_reviews()  # 惰性检查：防 milod 重启期间错过定时扫描
+    out = []
+    for g in office.store.groups():
+        if g["group_id"] in ("org", "secretary") or g["group_id"].startswith("dm-"):
+            continue
+        if g["status"] == "review":
+            g = {**g, "review_since": office.store.review_since(g["group_id"])}
+        out.append(g)
+    return {"groups": out}
 
 
 @app.get("/api/orgs/{org}/groups/{group_id}")
@@ -272,6 +278,7 @@ async def group_detail(
         "group_id": group_id,
         "title": (meta or {}).get("title"),
         "status": (meta or {}).get("status"),
+        "review_since": office.store.review_since(group_id),
         "events": office.store.group_events(group_id, category=category, run_id=run_id),
         "tasks": office.store.tasks(group_id),
     }
@@ -843,6 +850,33 @@ async def get_plan(org: str, group_id: str) -> dict[str, Any]:
     }
 
 
+class ConfirmRequest(BaseModel):
+    note: str = ""
+
+
+class ReworkRequest(BaseModel):
+    feedback: str
+    artifacts: list[dict[str, Any]] | None = None   # v0 预留（R3 文件资料）
+
+
+@app.post("/api/orgs/{org}/groups/{group_id}/confirm")
+async def confirm_group(org: str, group_id: str, body: ConfirmRequest) -> dict[str, Any]:
+    """确认验收 → 归档（用户确认才是终局，秘书的只是初筛）。"""
+    if not await hub.confirm_group(org, group_id, body.note):
+        raise HTTPException(409, "该任务群不在待确认状态")
+    return {"group_id": group_id, "status": "archived"}
+
+
+@app.post("/api/orgs/{org}/groups/{group_id}/rework")
+async def rework_group(org: str, group_id: str, body: ReworkRequest) -> dict[str, Any]:
+    """产出不符预期：补充要求/资料，在同群返工（上一轮产物回传，成员改稿）。"""
+    if not body.feedback.strip():
+        raise HTTPException(422, "请说明哪里需要改")
+    if not await hub.rework_group(org, group_id, body.feedback.strip(), body.artifacts):
+        raise HTTPException(409, "该任务群没有可返工的交付")
+    return {"group_id": group_id, "status": "reworking"}
+
+
 @app.post("/api/orgs/{org}/groups/{group_id}/retry")
 async def retry_group(org: str, group_id: str) -> dict[str, Any]:
     """重试分解（分解失败后的出口）：用原始需求重新分解。"""
@@ -943,6 +977,16 @@ def _row_to_frame(row: dict, *, replay: bool) -> dict[str, Any]:
         "payload": row["metadata"],
         "replay": replay,
     }
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    async def loop() -> None:
+        while True:
+            await asyncio.sleep(600)  # 每 10 分钟
+            with contextlib.suppress(Exception):
+                await hub.sweep_due_reviews()
+    asyncio.create_task(loop())
 
 
 @app.on_event("shutdown")

@@ -38,7 +38,8 @@ export interface MiloEvent {
 export interface GroupSummary {
   group_id: string;
   title: string | null;
-  status: "active" | "waiting" | "archived" | "failed";
+  status: "active" | "waiting" | "review" | "archived" | "failed";
+  review_since?: string | null;
   events: number;
   pending: number;
   created_at: string;
@@ -229,6 +230,7 @@ export const api = {
     const qs = q.toString();
     return fetch(`/api/orgs/${org}/groups/${gid}${qs ? "?" + qs : ""}`).then(j) as Promise<{
       group_id: string; title: string | null; status: string;
+      review_since?: string | null;
       events: MiloEvent[]; tasks: TaskRow[];
     }>;
   },
@@ -248,6 +250,18 @@ export const api = {
 
   plan: (org: string, gid: string): Promise<{ steps: PlanStep[] }> =>
     fetch(`/api/orgs/${org}/groups/${gid}/plan`).then(j),
+
+  confirmGroup: (org: string, gid: string, note = "") =>
+    fetch(`/api/orgs/${org}/groups/${gid}/confirm`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note }),
+    }).then(j) as Promise<{ status: string }>,
+
+  reworkGroup: (org: string, gid: string, feedback: string) =>
+    fetch(`/api/orgs/${org}/groups/${gid}/rework`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedback }),
+    }).then(j) as Promise<{ status: string }>,
 
   retryPlan: (org: string, gid: string) =>
     fetch(`/api/orgs/${org}/groups/${gid}/retry`, { method: "POST" })

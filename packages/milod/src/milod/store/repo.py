@@ -140,6 +140,43 @@ class Store:
         )
         self._conn.commit()
 
+    # ---- 待确认（review 态）--------------------------------------------
+    def enter_review(self, group_id: str) -> None:
+        """转入待你确认，并记录进入时间（自动归档倒计时基准）。"""
+        meta = self._group_meta(group_id)
+        meta["review_since"] = self._now()
+        self._conn.execute(
+            "UPDATE groups SET status='review', metadata=?, updated_at=? WHERE group_id=?",
+            (json.dumps(meta, ensure_ascii=False), self._now(), group_id))
+        self._conn.commit()
+
+    def _group_meta(self, group_id: str) -> dict:
+        row = self._conn.execute(
+            "SELECT metadata FROM groups WHERE group_id=?", (group_id,)).fetchone()
+        try:
+            return json.loads(row[0]) if row and row[0] else {}
+        except Exception:  # noqa: BLE001
+            return {}
+
+    def review_since(self, group_id: str) -> str | None:
+        return self._group_meta(group_id).get("review_since")
+
+    def due_reviews(self, hours: float) -> list[str]:
+        """待确认已超时的群（到点自动归档，视同满意）。"""
+        from datetime import datetime, timedelta, timezone
+
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        out = []
+        for r in self._conn.execute(
+                "SELECT group_id, metadata FROM groups WHERE status='review'").fetchall():
+            try:
+                since = json.loads(r[1] or "{}").get("review_since")
+                if since and datetime.fromisoformat(since) <= cutoff:
+                    out.append(r[0])
+            except Exception:  # noqa: BLE001
+                continue
+        return out
+
     # ---- 待批计划（落盘，milod 重启不丢）--------------------------------
     def save_pending_plan(self, group_id: str, envelopes: list[TaskEnvelope]) -> None:
         self._conn.execute(

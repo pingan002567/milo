@@ -475,3 +475,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 .failcard .ff { display: flex; gap: 10px; align-items: center; padding: 8px 13px;
   border-top: 1px solid var(--line); }
 .failcard .ff .muted { font-size: 11.5px; }
+
+/* 验收卡 */
+.reviewcard { border: 1px solid rgba(16,185,129,.4); border-radius: 14px; background: var(--panel);
+  margin: 10px 0; max-width: 760px; overflow: hidden; }
+.reviewcard .rh { background: var(--green-soft); color: var(--green); font-weight: 700;
+  font-size: 12px; padding: 8px 13px; }
+.reviewcard .rb { padding: 10px 13px; }
+.reviewcard .rf { display: flex; gap: 8px; align-items: center; padding: 8px 13px;
+  border-top: 1px solid var(--line); }
+.reviewcard .rf .muted { font-size: 11.5px; }

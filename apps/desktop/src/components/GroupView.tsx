@@ -12,6 +12,7 @@ const STATE_ZH: Record<string, string> = {
 };
 const GROUP_ZH: Record<string, [string, string]> = {
   active: ["进行中", "ok"], waiting: ["待你拍板", "warn"],
+  review: ["待你确认", "warn"],
   archived: ["已归档", ""], failed: ["分解/执行失败", "crit"],
 };
 
@@ -228,6 +229,69 @@ function PlanCard({
 
 type Mode = "key" | "all" | "esc";
 
+/** 验收卡：秘书初筛通过后等你拍板——满意归档 / 补充要求返工（同群改稿）。 */
+function ReviewCard({ reviewSince, artifacts, onConfirm, onRework }: {
+  reviewSince?: string | null;
+  artifacts: Array<{ taskId: string; name: string }>;
+  onConfirm: () => void; onRework: (feedback: string) => void;
+}) {
+  const [mode, setMode] = useState<"idle" | "rework">("idle");
+  const [feedback, setFeedback] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const left = (() => {
+    if (!reviewSince) return null;
+    const ms = 24 * 3600_000 - (Date.now() - Date.parse(reviewSince));
+    if (ms <= 0) return "即将自动归档";
+    const h = Math.floor(ms / 3600_000);
+    return h >= 1 ? `${h} 小时后自动归档` : `${Math.max(1, Math.round(ms / 60_000))} 分钟后自动归档`;
+  })();
+
+  return (
+    <div className="reviewcard">
+      <div className="rh">✅ 任务已完成，等你确认验收</div>
+      <div className="rb">
+        <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+          秘书只做了初筛（产物是否齐全、格式是否符合）——这活儿办得对不对由你说了算。
+        </div>
+        {artifacts.length > 0 && (
+          <div style={{ marginBottom: 6 }}>
+            {artifacts.map((a) => (
+              <span key={`${a.taskId}-${a.name}`} className="chip mono"
+                    style={{ marginRight: 5, fontSize: 11 }}>📄 {a.name}</span>
+            ))}
+          </div>
+        )}
+      </div>
+      {mode === "idle" ? (
+        <div className="rf">
+          <button className="btn primary sm" disabled={busy}
+                  onClick={() => { setBusy(true); onConfirm(); }}>满意，归档</button>
+          <button className="btn sm" onClick={() => setMode("rework")}>不满意，补充要求…</button>
+          {left && <span className="muted" style={{ marginLeft: "auto" }}>{left}</span>}
+        </div>
+      ) : (
+        <div className="rf" style={{ flexWrap: "wrap" }}>
+          <input className="setting-input" style={{ flex: 1, minWidth: 240, height: 32 }}
+                 autoFocus placeholder="说明哪里需要改、补充什么资料…"
+                 value={feedback} onChange={(e) => setFeedback(e.target.value)}
+                 onKeyDown={(e) => {
+                   if (e.key === "Enter" && feedback.trim()) { setBusy(true); onRework(feedback.trim()); }
+                 }} />
+          <button className="btn primary sm" disabled={busy || !feedback.trim()}
+                  onClick={() => { setBusy(true); onRework(feedback.trim()); }}>
+            {busy ? "返工中…" : "提交返工"}
+          </button>
+          <button className="btn sm" onClick={() => setMode("idle")}>取消</button>
+          <div className="muted" style={{ width: "100%", fontSize: 11.5, marginTop: 4 }}>
+            上一轮产物会一并交回给成员——它是改稿，不会从零重做
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** 分解/派单失败卡：把死胡同变成下一步动作（错误 + 能力缺口引导 + 重试）。 */
 function FailureCard({ payload, onRetry }: {
   payload: Record<string, any>; onRetry: () => void;
@@ -258,13 +322,15 @@ function FailureCard({ payload, onRetry }: {
 }
 
 export function GroupView({
-  org, title, status, events, tasks, plan, focusTaskId, onReply, onApprove, onReject, onRetry,
+  org, title, status, reviewSince, events, tasks, plan, focusTaskId,
+  onReply, onApprove, onReject, onRetry, onConfirm, onRework,
 }: {
-  org: string; title: string | null; status: string;
+  org: string; title: string | null; status: string; reviewSince?: string | null;
   events: MiloEvent[]; tasks: TaskRow[]; plan: PlanStep[] | null;
   focusTaskId?: string | null;
   onReply: (taskId: string, answer: string) => void;
   onApprove: () => void; onReject: () => void; onRetry: () => void;
+  onConfirm: () => void; onRework: (feedback: string) => void;
 }) {
   const [mode, setMode] = useState<Mode>("key");
   const pending = new Set(tasks.filter((t) => t.state === "input_required").map((t) => t.task_id));
@@ -398,6 +464,15 @@ export function GroupView({
             </div>
           );
         })}
+        {status === "review" && (
+          <ReviewCard reviewSince={reviewSince}
+                      artifacts={events.flatMap((e) =>
+                        Array.isArray(e.payload?.artifacts) && e.task_id
+                          ? e.payload.artifacts.filter((a: any) => a?.name && a?.uri)
+                              .map((a: any) => ({ taskId: e.task_id!, name: a.name }))
+                          : [])}
+                      onConfirm={onConfirm} onRework={onRework} />
+        )}
         <div ref={endRef} />
       </div>
     </>

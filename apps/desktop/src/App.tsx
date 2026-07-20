@@ -30,6 +30,7 @@ export default function App() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [title, setTitle] = useState<string | null>(null);
   const [gstatus, setGstatus] = useState("active");
+  const [reviewSince, setReviewSince] = useState<string | null>(null);
   const [plan, setPlan] = useState<PlanStep[] | null>(null);
   const [filter, setFilter] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -80,6 +81,7 @@ export default function App() {
     setFocusTask(focusTask ?? null);
     const d = await api.group(ORG, id);
     setEvents(d.events); setTasks(d.tasks); setTitle(d.title); setGstatus(d.status);
+    setReviewSince(d.review_since ?? null);
     d.events.forEach((e) => seen.current.add(e.event_id));
     await loadPlan(id, d.status);
   }, [loadPlan, ORG]);
@@ -102,6 +104,7 @@ export default function App() {
       if (e.group_id === gidRef.current && e.type !== "status") {
         api.group(ORG, e.group_id).then((d) => {
           setTasks(d.tasks); setGstatus(d.status); setTitle(d.title);
+          setReviewSince(d.review_since ?? null);
           // 分解要几十秒——计划卡不能只在打开群时拉一次；
           // 群转 waiting 即表示计划已就绪待批
           if (d.status === "waiting") loadPlan(e.group_id, d.status);
@@ -146,6 +149,18 @@ export default function App() {
     if (!gid) return;
     await api.approve(ORG, gid);
     setPlan(null);
+  };
+
+  const onConfirm = async () => {
+    if (!gid) return;
+    await api.confirmGroup(ORG, gid).catch(() => {});
+    await refreshLists(); openGroup(gid);
+  };
+
+  const onRework = async (feedback: string) => {
+    if (!gid) return;
+    await api.reworkGroup(ORG, gid, feedback).catch(() => {});
+    await refreshLists(); openGroup(gid);
   };
 
   const onRetry = async () => {
@@ -231,7 +246,7 @@ export default function App() {
               <button key={g.group_id}
                       className={`gitem ${gid === g.group_id ? "on" : ""}`}
                       onClick={() => openGroup(g.group_id)}>
-                <span className={`gdot ${g.status === "waiting" ? "waiting"
+                <span className={`gdot ${g.status === "waiting" || g.status === "review" ? "waiting"
                   : g.status === "failed" ? "failed" : "active"}`} />
                 <span className="gt">{g.title || g.group_id}</span>
                 {g.pending > 0 && <span className="gbdg">@你</span>}
@@ -302,8 +317,9 @@ export default function App() {
         {screen === "group" && gid && (
           <GroupView org={ORG} title={title} status={gstatus} events={events} tasks={tasks}
                      plan={plan} focusTaskId={focusTask}
+                     reviewSince={reviewSince}
                      onReply={onReply} onApprove={onApprove} onReject={onReject}
-                     onRetry={onRetry} />
+                     onRetry={onRetry} onConfirm={onConfirm} onRework={onRework} />
         )}
       </main>
 
