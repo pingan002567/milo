@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -49,10 +50,34 @@ class RejectRequest(BaseModel):
     reason: str = ""
 
 
-# ---- 组织 -----------------------------------------------------------------
+# ---- 团队 -----------------------------------------------------------------
+def _pending_counts(db: Path) -> tuple[int, int]:
+    """直接查该团队的 SQLite 统计待处理量——**不拉起成员子进程**。
+
+    跨团队待办可见性（团队管理设计 §3.2）：你在 A 团队干活时，
+    B 团队成员的请示不该失联。
+    """
+    import sqlite3
+
+    if not db.is_file():
+        return (0, 0)
+    try:
+        c = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        try:
+            waiting = c.execute(
+                "SELECT COUNT(*) FROM tasks WHERE state='input_required'").fetchone()[0]
+            review = c.execute(
+                "SELECT COUNT(*) FROM groups WHERE status='review'").fetchone()[0]
+            return (int(waiting), int(review))
+        finally:
+            c.close()
+    except Exception:  # noqa: BLE001 —— 统计失败不该让列表挂掉
+        return (0, 0)
+
+
 @app.get("/api/orgs")
 async def list_orgs() -> dict[str, Any]:
-    """扫描 ~/.milo/orgs 下的组织（有 org.yaml 即算）——供顶栏切换。"""
+    """团队列表：显示名、成员数、运行状态、跨团队待处理量。"""
     from milod.config.paths import milo_home
 
     root = milo_home() / "orgs"
@@ -63,16 +88,128 @@ async def list_orgs() -> dict[str, Any]:
                 continue
             try:
                 doc = yaml.safe_load((d / "org.yaml").read_text(encoding="utf-8")) or {}
+                meta = doc.get("metadata") or {}
                 members = (doc.get("spec") or {}).get("members") or []
             except Exception:  # noqa: BLE001 —— 坏文件不该让整个列表挂掉
-                members = []
+                meta, members = {}, []
+            waiting, review = _pending_counts(d / "milo.sqlite")
             orgs.append({
                 "org": d.name,
-                "title": (doc.get("metadata") or {}).get("description") or d.name,
+                # 显示名可中文；slug（目录名/API 路径）恒 ASCII（团队管理设计 §二）
+                "displayName": meta.get("displayName") or meta.get("name") or d.name,
+                "title": meta.get("description") or d.name,
                 "members": len(members),
                 "open": d.name in hub._offices,  # 已开工（成员子进程在跑）
+                "pending": waiting,   # 等你拍板的请示
+                "review": review,     # 等你验收的任务群
             })
     return {"orgs": orgs}
+
+
+class CreateOrgRequest(BaseModel):
+    """新建团队（团队管理设计 §3.1）：显示名 + 模型绑定（默认继承）+ 可选首批成员。"""
+
+    displayName: str
+    slug: str | None = None
+    from_org: str | None = None                 # 继承其模型绑定
+    members: list[str] | None = None            # Agent 库 ref 列表
+    activate_members: bool = True
+
+
+def _slugify(name: str) -> str:
+    import hashlib
+    import re as _re
+
+    s = _re.sub(r"[^A-Za-z0-9-]+", "-", name.strip()).strip("-").lower()
+    if s:
+        return s[:32]
+    return f"team-{hashlib.md5(name.encode()).hexdigest()[:6]}"
+
+
+@app.post("/api/orgs")
+async def create_org(body: CreateOrgRequest) -> dict[str, Any]:
+    from milod.config.paths import library_dir, milo_home, org_dir
+    from milod.pack.renderer import derive_slug, load_manifest
+
+    display = body.displayName.strip()
+    if not (1 <= len(display) <= 30):
+        raise HTTPException(422, "团队名长度需在 1–30 字符")
+    slug = (body.slug or "").strip() or _slugify(display)
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", slug):
+        raise HTTPException(422, "团队标识只能是小写字母、数字与连字符")
+    root = org_dir(slug)
+    if root.exists():
+        raise HTTPException(409, f"团队标识 {slug} 已被占用")
+
+    # 模型绑定：默认继承来源团队（密钥同 secret_env 直接复用，无需重配）
+    src = org_dir(body.from_org) / "bindings.yaml" if body.from_org else None
+    if src and src.is_file():
+        bindings = yaml.safe_load(src.read_text(encoding="utf-8")) or {}
+    else:
+        any_b = next((p / "bindings.yaml" for p in (milo_home() / "orgs").glob("*")
+                      if (p / "bindings.yaml").is_file()), None)
+        bindings = yaml.safe_load(any_b.read_text(encoding="utf-8")) if any_b else {}
+    if not bindings.get("model"):
+        raise HTTPException(422, "没有可继承的模型绑定——请先在设置里配置模型")
+
+    members = []
+    for ref in body.members or []:
+        pack = library_dir() / Path(ref).name
+        try:
+            mf = load_manifest(pack)
+        except Exception:  # noqa: BLE001 —— 坏模板跳过，不阻断建团队
+            continue
+        name = mf["name"]
+        members.append({
+            "name": name, "agent": Path(ref).name,
+            "enrolled": bool(body.activate_members),
+            "template_name": mf.get("name"),
+            "slug": derive_slug(name, str(mf.get("name") or "member")),
+            "description": mf.get("description", ""),
+            "capabilities": [c["id"] for c in mf.get("capabilities", [])],
+            "permissions": __import__("milod.config.defaults", fromlist=["x"])
+                .load_default_permissions(),
+        })
+
+    root.mkdir(parents=True)
+    (root / "org.yaml").write_text(yaml.safe_dump({
+        "apiVersion": "milo.dev/v1alpha1", "kind": "Organization",
+        "metadata": {"name": slug, "displayName": display},
+        "spec": {"members": members, "limits": {"maxParallelMembers": 5}},
+    }, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    (root / "bindings.yaml").write_text(
+        yaml.safe_dump(bindings, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return {"org": slug, "displayName": display, "members": len(members)}
+
+
+class OrgPatch(BaseModel):
+    displayName: str | None = None
+    maxParallelMembers: int | None = None
+
+
+@app.patch("/api/orgs/{org}")
+async def patch_org(org: str, body: OrgPatch) -> dict[str, Any]:
+    """团队设置：显示名、编制上限。"""
+    from milod.config.paths import org_dir
+
+    f = org_dir(org) / "org.yaml"
+    if not f.is_file():
+        raise HTTPException(404, f"没有团队 {org}")
+    doc = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    if body.displayName is not None:
+        name = body.displayName.strip()
+        if not (1 <= len(name) <= 30):
+            raise HTTPException(422, "团队名长度需在 1–30 字符")
+        doc.setdefault("metadata", {})["displayName"] = name
+    if body.maxParallelMembers is not None:
+        if not (1 <= body.maxParallelMembers <= 20):
+            raise HTTPException(422, "编制上限需在 1–20（监督幅度护栏）")
+        doc.setdefault("spec", {}).setdefault("limits", {})["maxParallelMembers"] = \
+            body.maxParallelMembers
+    f.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    meta = doc.get("metadata") or {}
+    return {"org": org, "displayName": meta.get("displayName") or org,
+            "limits": (doc.get("spec") or {}).get("limits", {})}
 
 
 # ---- 设置（模型绑定 + 密钥）----------------------------------------------

@@ -488,3 +488,37 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 .gdot.done { background: var(--pine); }
 .reviewcard.done { border-color: rgba(59,130,246,.35); }
 .reviewcard.done .rh { background: var(--pine-soft); color: var(--pine); }
+
+/* ─── 团队切换器 ─── */
+.orgbox { position: relative; margin: 0 6px 10px; }
+.orgsel { display: flex; align-items: center; gap: 7px; width: 100%; background: var(--panel);
+  color: var(--ink-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 10px; font-size: 12.5px; cursor: pointer; font-family: inherit; }
+.orgsel:hover { border-color: var(--ink-3); }
+.orgsel .oname { flex: 1; min-width: 0; text-align: left; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 600; }
+.ochev { color: var(--ink-3); font-size: 11px; }
+.odot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.odot.on { background: var(--green); }
+.orgmenu { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; z-index: 40;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-md); padding: 4px; }
+.orgitem { display: flex; align-items: center; gap: 7px; width: 100%; border: none;
+  background: none; color: var(--ink-2); border-radius: 7px; padding: 7px 9px;
+  font-size: 12.5px; cursor: pointer; text-align: left; }
+.orgitem:hover { background: var(--panel-2); }
+.orgitem.on { background: var(--side-hl); color: var(--ink); }
+.orgitem .oname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orgitem .obdg { background: var(--crit); color: #fff; font-size: 10px; border-radius: 999px;
+  padding: 0 6px; line-height: 16px; }
+.orgitem.newteam { color: var(--pine); border-top: 1px solid var(--line); margin-top: 4px;
+  padding-top: 9px; border-radius: 0 0 7px 7px; }
+.pickrow { display: flex; align-items: center; gap: 8px; padding: 6px 0;
+  border-bottom: 1px dashed var(--line); font-size: 12.5px; cursor: pointer; }
+.pickrow:last-child { border-bottom: none; }
+
+/* 左栏底部固定：系统设置 */
+.sysbtn { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: auto;
+  border: none; border-top: 1px solid var(--line); background: none; color: var(--ink-3);
+  padding: 10px; font-size: 12.5px; cursor: pointer; text-align: left; font-family: inherit; }
+.sysbtn:hover { color: var(--ink); background: var(--panel-2); }

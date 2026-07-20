@@ -59,7 +59,14 @@ export interface PlanStep {
   task_id: string; capability: string; objective: string;
   format: string; artifacts: string[]; constraints: string[];
 }
-export interface OrgSummary { org: string; title: string; members: number; open: boolean }
+export interface OrgSummary {
+  org: string; title: string; members: number; open: boolean;
+  displayName?: string;
+  /** 等你拍板的请示数（跨团队可见性） */
+  pending?: number;
+  /** 等你验收的任务群数 */
+  review?: number;
+}
 export interface Permissions { network?: string[]; filesystem?: string; python_repl?: boolean }
 export interface PackInfo {
   path: string; name: string; version?: string; author?: string; description?: string;
@@ -111,6 +118,18 @@ const j = async (r: Response) => {
 
 export const api = {
   orgs: (): Promise<{ orgs: OrgSummary[] }> => fetch(`/api/orgs`).then(j),
+
+  createOrg: (body: { displayName: string; slug?: string; from_org?: string; members?: string[] }) =>
+    fetch(`/api/orgs`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(j) as Promise<{ org: string; displayName: string; members: number }>,
+
+  patchOrg: (org: string, patch: { displayName?: string; maxParallelMembers?: number }) =>
+    fetch(`/api/orgs/${org}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }).then(j) as Promise<{ displayName: string; limits: Record<string, number> }>,
 
   members: (org: string): Promise<{ members: Member[] }> =>
     fetch(`/api/orgs/${org}/members`).then(j),

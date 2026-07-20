@@ -47,18 +47,71 @@ function SettingRow({ label, sub, children }: {
 
 /* ---------- 通用（外观/工作区/护栏，形态照搬）---------- */
 
-function GeneralTab({ org }: { org: string }) {
-  const { themeMode, setThemeMode } = useThemeMode();
+/** 团队信息（团队设置）：显示名、编制上限、数据目录、用量。 */
+function TeamInfoTab({ org, onOrgChanged }: { org: string; onOrgChanged?: () => void }) {
+  const [name, setName] = useState("");
+  const [limit, setLimit] = useState(5);
   const [members, setMembers] = useState<number | null>(null);
-  const [limit, setLimit] = useState<number | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    api.orgs().then((r) => {
+      const me = r.orgs.find((o) => o.org === org);
+      setName(me?.displayName ?? org);
+    }).catch(() => setName(org));
     api.roster(org).then((r) => {
       setMembers(r.members.length);
       setLimit(r.limits?.maxParallelMembers ?? 5);
-    }).catch(() => { setMembers(null); setLimit(null); });
+    }).catch(() => setMembers(null));
   }, [org]);
 
+  const save = async () => {
+    setMsg(null);
+    try {
+      await api.patchOrg(org, { displayName: name.trim(), maxParallelMembers: limit });
+      setDirty(false); setMsg("已保存");
+      onOrgChanged?.();
+    } catch (e: any) {
+      setMsg(`保存失败：${String(e?.message ?? e).slice(0, 120)}`);
+    }
+  };
+
+  return (
+    <div className="settings-stack">
+      <SectionCard icon="👥" title="团队信息" subtitle={org}
+        description="显示名可改；标识（目录名与接口路径）创建后固定">
+        <div style={{ display: "grid", gap: 10 }}>
+          <label>
+            <span className="field-label">团队名</span>
+            <input className="setting-input" value={name}
+                   onChange={(e) => { setName(e.target.value); setDirty(true); }} />
+          </label>
+          <SettingRow label="编制上限" sub="监督幅度护栏：人能有效监督的对象约 5 个">
+            <input className="setting-input mono" type="number" min={1} max={20}
+                   style={{ width: 80, height: 30, textAlign: "center" }}
+                   value={limit}
+                   onChange={(e) => { setLimit(Number(e.target.value)); setDirty(true); }} />
+          </SettingRow>
+          <SettingRow label="当前成员">
+            <span className="mono" style={{ fontSize: 12 }}>{members ?? "-"} / {limit}</span>
+          </SettingRow>
+          <SettingRow label="数据目录" sub="名册 / 事件库 / 交付产物 / 成员工作区">
+            <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", wordBreak: "break-all", textAlign: "right" }}>
+              ~/.milo/orgs/{org}
+            </span>
+          </SettingRow>
+          {dirty && <div><button className="btn primary sm" onClick={save}>保存</button></div>}
+          {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+/** 通用（系统设置）：外观 + 全局红线。 */
+function GeneralTab() {
+  const { themeMode, setThemeMode } = useThemeMode();
   return (
     <div className="settings-stack">
       <SectionCard title="外观" description="明暗主题跟随">
@@ -81,17 +134,9 @@ function GeneralTab({ org }: { org: string }) {
         </SettingRow>
       </SectionCard>
 
-      <SectionCard title="工作区" description="当前团队与数据目录；切换团队在左栏顶部">
-        <SettingRow label="当前团队">
-          <span className="mono" style={{ fontSize: 12 }}>{org}</span>
-        </SettingRow>
-        <SettingRow label="数据目录" sub="名册 / 事件库 / 交付产物都在这里">
-          <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", wordBreak: "break-all", textAlign: "right" }}>
-            ~/.milo/orgs/{org}
-          </span>
-        </SettingRow>
-        <SettingRow label="成员">
-          <span className="mono" style={{ fontSize: 12 }}>{members ?? "-"} / 上限 {limit ?? "-"}</span>
+      <SectionCard title="关于" subtitle="v0.1">
+        <SettingRow label="Milo" sub="AI 团队指挥台 · 本地优先，数据全在 ~/.milo">
+          <span className="mono" style={{ fontSize: 11.5 }}>桌面壳 v0.1</span>
         </SettingRow>
       </SectionCard>
     </div>
@@ -390,18 +435,25 @@ function AiTab({ org }: { org: string }) {
 
 /* ---------- 弹窗（照搬 SettingsModal：遮罩+大窗+左导航右内容）---------- */
 
-type Tab = "general" | "perms" | "ai";
+type Tab = "team" | "ai" | "general" | "perms";
 
-const TABS: Array<{ key: Tab; label: string; icon: string }> = [
-  { key: "general", label: "通用", icon: "⚙️" },
-  { key: "perms", label: "权限", icon: "🛡️" },
+const TEAM_TABS: Array<{ key: Tab; label: string; icon: string }> = [
+  { key: "team", label: "团队信息", icon: "👥" },
   { key: "ai", label: "AI 配置", icon: "🤖" },
 ];
+const SYSTEM_TABS: Array<{ key: Tab; label: string; icon: string }> = [
+  { key: "general", label: "通用", icon: "⚙️" },
+  { key: "perms", label: "权限", icon: "🛡️" },
+];
 
-export function SettingsModal({ org, open, connected, onClose }: {
-  org: string; open: boolean; connected: boolean; onClose: () => void;
+export function SettingsModal({ org, open, connected, scope, onClose, onOrgChanged }: {
+  org: string; open: boolean; connected: boolean;
+  scope: "team" | "system";
+  onClose: () => void; onOrgChanged?: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>("general");
+  const tabs = scope === "team" ? TEAM_TABS : SYSTEM_TABS;
+  const [tab, setTab] = useState<Tab>(tabs[0].key);
+  useEffect(() => { setTab(tabs[0].key); }, [scope]);
 
   useEffect(() => {
     if (!open) return;
@@ -415,7 +467,7 @@ export function SettingsModal({ org, open, connected, onClose }: {
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="settings-modal" role="dialog" aria-modal="true">
         <div className="settings-modal-head">
-          <span className="settings-modal-title">系统设置</span>
+          <span className="settings-modal-title">{scope === "team" ? `团队设置 · ${org}` : "系统设置"}</span>
           <button className="func-close" onClick={onClose} title="关闭 (Esc)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
           </button>
@@ -423,7 +475,7 @@ export function SettingsModal({ org, open, connected, onClose }: {
         <div className="settings-modal-body">
           <div className="settings-layout">
             <nav className="settings-nav">
-              {TABS.map((t) => (
+              {tabs.map((t) => (
                 <button key={t.key} type="button"
                   className={`settings-nav-item ${tab === t.key ? "active" : ""}`}
                   onClick={() => setTab(t.key)}>
@@ -437,7 +489,8 @@ export function SettingsModal({ org, open, connected, onClose }: {
               </div>
             </nav>
             <div className="settings-content">
-              {tab === "general" && <GeneralTab org={org} />}
+              {tab === "team" && <TeamInfoTab org={org} onOrgChanged={onOrgChanged} />}
+              {tab === "general" && <GeneralTab />}
               {tab === "perms" && <PermissionsTab org={org} />}
               {tab === "ai" && <AiTab org={org} />}
             </div>

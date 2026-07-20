@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GroupView } from "./components/GroupView";
 import { Inspector } from "./components/Inspector";
+import { OrgSwitcher } from "./components/OrgSwitcher";
 import { MarketView } from "./components/MarketView";
 import { OrgView } from "./components/OrgView";
 import { RosterView } from "./components/RosterView";
@@ -33,7 +34,7 @@ export default function App() {
   const [acceptedAt, setAcceptedAt] = useState<string | null>(null);
   const [plan, setPlan] = useState<PlanStep[] | null>(null);
   const [filter, setFilter] = useState("");
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsScope, setSettingsScope] = useState<"team" | "system" | null>(null);
   const [focusTask, setFocusTask] = useState<string | null>(null);
   const [secEvents, setSecEvents] = useState<MiloEvent[]>([]);  // 秘书对话实时流
   const [dmTarget, setDmTarget] = useState<string | null>(null);   // 私聊对象
@@ -53,13 +54,15 @@ export default function App() {
     setGroups(g.groups); setTodos(t.todos); setMembers(m.members); setDms(d.dms);
   }, [ORG]);
 
-  // 组织列表（顶栏切换用）
+  // 团队列表（切换器用）；定时刷新以获得跨团队待办角标
   useEffect(() => {
-    api.orgs().then((r) => {
+    const load = () => api.orgs().then((r) => {
       setOrgs(r.orgs);
-      // 上次选的组织若已不存在，回落到第一个
       if (r.orgs.length && !r.orgs.some((o) => o.org === ORG)) switchOrg(r.orgs[0].org);
     }).catch(() => setOrgs([]));
+    load();
+    const iv = setInterval(load, 30_000);
+    return () => clearInterval(iv);
   }, []);
 
   const switchOrg = (next: string) => {
@@ -200,15 +203,11 @@ export default function App() {
       {/* ── 左栏：功能导航 + 任务群列表 ── */}
       <aside className="side">
         <div className="brand">Milo</div>
-        <select className="orgsel" value={ORG} onChange={(e) => switchOrg(e.target.value)}
-                aria-label="切换团队">
-          {orgs.map((o) => (
-            <option key={o.org} value={o.org}>
-              {o.open ? "● " : "○ "}{o.org}（{o.members} 名成员）
-            </option>
-          ))}
-          {!orgs.some((o) => o.org === ORG) && <option value={ORG}>{ORG}</option>}
-        </select>
+        <OrgSwitcher org={ORG} orgs={orgs} onSwitch={switchOrg}
+                     onCreated={(slug) => {
+                       api.orgs().then((r) => setOrgs(r.orgs)).catch(() => {});
+                       switchOrg(slug);
+                     }} />
         <button className={`nv ${screen === "chat" ? "on" : ""}`} onClick={() => setScreen("chat")}>
           💬 秘书
         </button>
@@ -224,8 +223,8 @@ export default function App() {
         <button className={`nv ${screen === "roster" ? "on" : ""}`} onClick={() => setScreen("roster")}>
           🗂 名册
         </button>
-        <button className="nv" onClick={() => setSettingsOpen(true)}>
-          ⚙️ 设置
+        <button className="nv" onClick={() => setSettingsScope("team")}>
+          ⚙️ 团队设置
         </button>
 
         <div className="dmsec">
@@ -285,7 +284,9 @@ export default function App() {
             )}
           </div>
         </div>
-        <div className="foot">桌面壳 v0.1 · {members.length} 名成员</div>
+        <button className="sysbtn" onClick={() => setSettingsScope("system")}>
+          <span>⚙︎</span> 系统设置
+        </button>
       </aside>
 
       {/* ── 中栏：主内容 ── */}
@@ -346,8 +347,10 @@ export default function App() {
                 onClick={() => { setInspOpen(true); localStorage.setItem("milo.insp", "1"); }}>‹</button>
       )}
 
-      <SettingsModal org={ORG} open={settingsOpen} connected={conn === "open"}
-                     onClose={() => setSettingsOpen(false)} />
+      <SettingsModal org={ORG} open={settingsScope !== null} connected={conn === "open"}
+                     scope={settingsScope ?? "system"}
+                     onClose={() => setSettingsScope(null)}
+                     onOrgChanged={() => api.orgs().then((r) => setOrgs(r.orgs)).catch(() => {})} />
 
       <div className="statusbar">
         <span className={`dot ${conn}`} />
