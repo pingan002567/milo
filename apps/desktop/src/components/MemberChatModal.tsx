@@ -1,97 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type MiloEvent } from "../lib/api";
-import { Md } from "./Md";
+import { buildTurns, TurnList } from "./Conversation";
 
 /**
- * 成员私聊——会话形态对齐 DeerFlow 官方前端（ai-elements/message + reasoning）：
- * 无头像；用户消息右对齐灰气泡、纯文本 verbatim（官方注释：输入不是 Markdown，
- * 按 MD 解析会毁掉粘贴的代码/日志）；成员消息全宽 Markdown 文档流；
- * 思考过程 = 🧠 折叠条（流式时 "思考中…(Ns)" 计时，完成后 "思考了 N 秒"可展开）；
- * 悬停浮出复制按钮。
- *
- * 数据映射：owner chat → user；member chat → assistant；
- * 回复前累积的 status（trace 流）→ 该回复的 reasoning 块。
+ * 成员私聊——全权调教通道（用户决策：私聊里不设任何限制）。
+ * 会话形态对齐 DeerFlow 官方前端（与秘书页共用 Conversation 组件）。
+ * 会话即特殊群 dm-<name>：历史走群接口，实时走 WS（App 转入）。
  */
-
-type Turn =
-  | { kind: "user"; key: string; text: string }
-  | { kind: "assistant"; key: string; text: string; reasoning: string; seconds: number | null }
-  | { kind: "thinking"; key: string; reasoning: string; startTs: string };
-
-function buildTurns(events: MiloEvent[]): Turn[] {
-  const turns: Turn[] = [];
-  let buf = "";
-  let bufStart: string | null = null;
-  for (const e of events) {
-    if (e.type === "status") {
-      if (!buf) bufStart = e.ts;
-      buf += String(e.payload?.doing ?? e.content ?? "");
-      continue;
-    }
-    if (e.type !== "chat") continue;
-    const text = String(e.payload?.text ?? e.content ?? "");
-    if (e.actor === "owner") {
-      buf = ""; bufStart = null; // 用户发言重置思考缓冲
-      turns.push({ kind: "user", key: e.event_id, text });
-    } else {
-      const seconds = bufStart
-        ? Math.max(1, Math.round((Date.parse(e.ts) - Date.parse(bufStart)) / 1000))
-        : null;
-      turns.push({ kind: "assistant", key: e.event_id, text, reasoning: buf, seconds });
-      buf = ""; bufStart = null;
-    }
-  }
-  if (buf) {
-    turns.push({ kind: "thinking", key: "live", reasoning: buf, startTs: bufStart! });
-  }
-  return turns;
-}
-
-/** 🧠 思考条：官方 Reasoning 形态（trigger + 可折叠 muted 正文）。 */
-function ReasoningBlock({ reasoning, seconds, streaming }: {
-  reasoning: string; seconds: number | null; streaming: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    if (!streaming) return;
-    const t0 = Date.now();
-    const iv = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
-    return () => clearInterval(iv);
-  }, [streaming]);
-
-  return (
-    <div className="reason">
-      <button className="reason-trigger" onClick={() => reasoning && setOpen(!open)}>
-        <span className="reason-brain">🧠</span>
-        {streaming ? (
-          <span className="shimmer">思考中…（{elapsed}s）</span>
-        ) : (
-          <span>思考了 {seconds ?? "几"} 秒</span>
-        )}
-        {reasoning && <span className={`reason-chevron ${open ? "open" : ""}`}>⌄</span>}
-      </button>
-      {(open || streaming) && reasoning && (
-        <div className="reason-content">{reasoning.slice(-2000)}</div>
-      )}
-    </div>
-  );
-}
-
-function CopyBtn({ text }: { text: string }) {
-  const [done, setDone] = useState(false);
-  return (
-    <button className="msgcopy" title="复制"
-            onClick={() => {
-              navigator.clipboard?.writeText(text).then(() => {
-                setDone(true); setTimeout(() => setDone(false), 1200);
-              });
-            }}>
-      {done ? "✓ 已复制" : "复制"}
-    </button>
-  );
-}
-
 export function MemberChatView({ org, member, liveEvents }: {
   org: string; member: string; liveEvents: MiloEvent[];
 }) {
@@ -120,7 +35,8 @@ export function MemberChatView({ org, member, liveEvents }: {
   const turns = useMemo(() => buildTurns(events), [events]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [turns.length,
-    turns[turns.length - 1]?.kind === "thinking" ? (turns[turns.length - 1] as any).reasoning.length : 0]);
+    turns[turns.length - 1]?.kind === "thinking"
+      ? (turns[turns.length - 1] as any).reasoning.length : 0]);
 
   const send = async () => {
     const text = input.trim();
@@ -157,33 +73,7 @@ export function MemberChatView({ org, member, liveEvents }: {
             </div>
           </div>
         )}
-        {turns.map((t) => {
-          if (t.kind === "user") {
-            return (
-              <div key={t.key} className="dfmsg user">
-                <div className="dfbubble">{t.text}</div>
-              </div>
-            );
-          }
-          if (t.kind === "thinking") {
-            return (
-              <div key={t.key} className="dfmsg assistant">
-                <ReasoningBlock reasoning={t.reasoning} seconds={null} streaming />
-              </div>
-            );
-          }
-          return (
-            <div key={t.key} className="dfmsg assistant">
-              {t.reasoning && (
-                <ReasoningBlock reasoning={t.reasoning} seconds={t.seconds} streaming={false} />
-              )}
-              <div className="dfcontent">
-                <Md text={t.text} />
-              </div>
-              <div className="dftoolbar"><CopyBtn text={t.text} /></div>
-            </div>
-          );
-        })}
+        <TurnList turns={turns} />
         <div ref={endRef} />
       </div>
 
