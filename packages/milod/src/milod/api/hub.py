@@ -177,16 +177,30 @@ class Hub:
         office.store.set_group_status(group_id, "waiting")
 
     # ---- 验收确认与返工（验收与返工设计 §一）----------------------------
-    async def confirm_group(self, org: str, group_id: str, note: str = "") -> bool:
-        """确认满意 → 归档。用户确认才是验收终局，秘书的只是初筛。"""
+    async def accept_group(self, org: str, group_id: str, note: str = "") -> bool:
+        """验收通过（**不归档**）：任务留在视野里可继续用、继续提要求；
+        归档是另一个动作（手动或 24h 后自动）。"""
         office = await self.office(org)
         cur = next((g["status"] for g in office.store.groups()
                     if g["group_id"] == group_id), None)
-        if cur not in ("review", "archived"):
+        if cur != "review":
             return False
         office._emit(MiloEvent(
             group_id=group_id, type=EventType.CHAT, actor="owner",
-            payload={"text": f"验收通过，归档{('：' + note) if note else ''}"}))
+            payload={"text": f"验收通过{('：' + note) if note else ''}"}))
+        office.store.mark_accepted(group_id)
+        return True
+
+    async def archive_group(self, org: str, group_id: str) -> bool:
+        """归档：收进历史（验收之后的独立动作，也可由超时自动触发）。"""
+        office = await self.office(org)
+        cur = next((g["status"] for g in office.store.groups()
+                    if g["group_id"] == group_id), None)
+        if cur not in ("accepted", "review", "failed"):
+            return False
+        office._emit(MiloEvent(
+            group_id=group_id, type=EventType.SYSTEM, actor="owner",
+            payload={"msg": "已归档"}))
         office.store.set_group_status(group_id, "archived")
         return True
 
@@ -205,7 +219,7 @@ class Hub:
             return False
         # 返工目标：最后一个交付过的任务（多步计划里通常就是最终产出方）
         target = next((t for t in reversed(tasks)
-                       if t["state"] in ("accepted", "rejected", "delivered")), None)
+                       if t["state"] in ("accepted", "rejected", "delivered")), None)  # 已验收也可打回
         if target is None:
             return False
 
@@ -246,14 +260,17 @@ class Hub:
             await office.collect(env.task_id)
         office.sync_group_status(group_id)
 
-    async def sweep_due_reviews(self, hours: float = 24.0) -> int:
-        """待确认超时 → 自动归档（视同满意）。后台定时 + 惰性检查双保险。"""
+    async def sweep_due_archives(self, hours: float = 24.0) -> int:
+        """**已验收**超过保留时长 → 自动归档。后台定时 + 惰性检查双保险。
+
+        只扫 accepted：未确认的群不自动归档——验收是用户的判断，不能代劳。
+        """
         n = 0
-        for org, office in list(self._offices.items()):
-            for gid in office.store.due_reviews(hours):
+        for _org, office in list(self._offices.items()):
+            for gid in office.store.due_archives(hours):
                 office._emit(MiloEvent(
                     group_id=gid, type=EventType.SYSTEM, actor="system",
-                    payload={"msg": f"待确认超过 {hours:.0f} 小时，已自动归档"}))
+                    payload={"msg": f"验收通过已满 {hours:.0f} 小时，自动归档"}))
                 office.store.set_group_status(gid, "archived")
                 n += 1
         return n

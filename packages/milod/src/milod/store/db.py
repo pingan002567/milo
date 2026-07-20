@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS groups (
     group_id    TEXT PRIMARY KEY,
     title       TEXT,                      -- 显示名；缺省时 UI 回退到 group_id
     status      TEXT NOT NULL DEFAULT 'active'
-                CHECK (status IN ('active','waiting','review','archived','failed')),
+                CHECK (status IN ('active','waiting','review','accepted','archived','failed')),
     metadata    TEXT NOT NULL DEFAULT '{}',
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL

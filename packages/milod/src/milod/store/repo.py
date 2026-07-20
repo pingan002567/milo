@@ -142,13 +142,28 @@ class Store:
 
     # ---- 待确认（review 态）--------------------------------------------
     def enter_review(self, group_id: str) -> None:
-        """转入待你确认，并记录进入时间（自动归档倒计时基准）。"""
+        """转入待你确认。**不设自动归档倒计时**——验收是你的判断，
+        系统不能替你决定；未确认的任务永远等着（验收与返工设计 §一修正）。"""
         meta = self._group_meta(group_id)
         meta["review_since"] = self._now()
+        meta.pop("accepted_at", None)  # 返工后重新待确认：清掉上一轮的验收时间
         self._conn.execute(
             "UPDATE groups SET status='review', metadata=?, updated_at=? WHERE group_id=?",
             (json.dumps(meta, ensure_ascii=False), self._now(), group_id))
         self._conn.commit()
+
+    def mark_accepted(self, group_id: str) -> None:
+        """验收通过（≠归档）：任务留在视野里可继续用/继续提要求；
+        自动归档倒计时从此刻起算。"""
+        meta = self._group_meta(group_id)
+        meta["accepted_at"] = self._now()
+        self._conn.execute(
+            "UPDATE groups SET status='accepted', metadata=?, updated_at=? WHERE group_id=?",
+            (json.dumps(meta, ensure_ascii=False), self._now(), group_id))
+        self._conn.commit()
+
+    def accepted_at(self, group_id: str) -> str | None:
+        return self._group_meta(group_id).get("accepted_at")
 
     def _group_meta(self, group_id: str) -> dict:
         row = self._conn.execute(
@@ -161,17 +176,20 @@ class Store:
     def review_since(self, group_id: str) -> str | None:
         return self._group_meta(group_id).get("review_since")
 
-    def due_reviews(self, hours: float) -> list[str]:
-        """待确认已超时的群（到点自动归档，视同满意）。"""
+    def due_archives(self, hours: float) -> list[str]:
+        """**已验收**且超过保留时长的群 → 自动归档。
+
+        只扫 accepted 态：未确认的群不在此列（不替用户做验收决定）。
+        """
         from datetime import datetime, timedelta, timezone
 
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         out = []
         for r in self._conn.execute(
-                "SELECT group_id, metadata FROM groups WHERE status='review'").fetchall():
+                "SELECT group_id, metadata FROM groups WHERE status='accepted'").fetchall():
             try:
-                since = json.loads(r[1] or "{}").get("review_since")
-                if since and datetime.fromisoformat(since) <= cutoff:
+                at = json.loads(r[1] or "{}").get("accepted_at")
+                if at and datetime.fromisoformat(at) <= cutoff:
                     out.append(r[0])
             except Exception:  # noqa: BLE001
                 continue

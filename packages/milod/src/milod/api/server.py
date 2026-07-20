@@ -252,13 +252,15 @@ async def list_dms(org: str) -> dict[str, Any]:
 async def list_groups(org: str) -> dict[str, Any]:
     """左边栏任务群列表：@你 未处理的带角标（org 审计群与秘书对话群不在其列）。"""
     office = await hub.office(org)
-    await hub.sweep_due_reviews()  # 惰性检查：防 milod 重启期间错过定时扫描
+    await hub.sweep_due_archives()  # 惰性检查：防 milod 重启期间错过定时扫描
     out = []
     for g in office.store.groups():
         if g["group_id"] in ("org", "secretary") or g["group_id"].startswith("dm-"):
             continue
         if g["status"] == "review":
             g = {**g, "review_since": office.store.review_since(g["group_id"])}
+        elif g["status"] == "accepted":
+            g = {**g, "accepted_at": office.store.accepted_at(g["group_id"])}
         out.append(g)
     return {"groups": out}
 
@@ -279,6 +281,7 @@ async def group_detail(
         "title": (meta or {}).get("title"),
         "status": (meta or {}).get("status"),
         "review_since": office.store.review_since(group_id),
+        "accepted_at": office.store.accepted_at(group_id),
         "events": office.store.group_events(group_id, category=category, run_id=run_id),
         "tasks": office.store.tasks(group_id),
     }
@@ -859,11 +862,19 @@ class ReworkRequest(BaseModel):
     artifacts: list[dict[str, Any]] | None = None   # v0 预留（R3 文件资料）
 
 
-@app.post("/api/orgs/{org}/groups/{group_id}/confirm")
-async def confirm_group(org: str, group_id: str, body: ConfirmRequest) -> dict[str, Any]:
-    """确认验收 → 归档（用户确认才是终局，秘书的只是初筛）。"""
-    if not await hub.confirm_group(org, group_id, body.note):
+@app.post("/api/orgs/{org}/groups/{group_id}/accept")
+async def accept_group(org: str, group_id: str, body: ConfirmRequest) -> dict[str, Any]:
+    """验收通过（不归档）——归档是独立动作，见 /archive。"""
+    if not await hub.accept_group(org, group_id, body.note):
         raise HTTPException(409, "该任务群不在待确认状态")
+    return {"group_id": group_id, "status": "accepted"}
+
+
+@app.post("/api/orgs/{org}/groups/{group_id}/archive")
+async def archive_group(org: str, group_id: str) -> dict[str, Any]:
+    """归档：收进历史。"""
+    if not await hub.archive_group(org, group_id):
+        raise HTTPException(409, "该任务群当前不可归档")
     return {"group_id": group_id, "status": "archived"}
 
 
@@ -985,7 +996,7 @@ async def _startup() -> None:
         while True:
             await asyncio.sleep(600)  # 每 10 分钟
             with contextlib.suppress(Exception):
-                await hub.sweep_due_reviews()
+                await hub.sweep_due_archives()
     asyncio.create_task(loop())
 
 

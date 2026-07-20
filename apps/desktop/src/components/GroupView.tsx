@@ -12,7 +12,7 @@ const STATE_ZH: Record<string, string> = {
 };
 const GROUP_ZH: Record<string, [string, string]> = {
   active: ["进行中", "ok"], waiting: ["待你拍板", "warn"],
-  review: ["待你确认", "warn"],
+  review: ["待你确认", "warn"], accepted: ["已验收 · 待归档", "ok"],
   archived: ["已归档", ""], failed: ["分解/执行失败", "crit"],
 };
 
@@ -230,29 +230,33 @@ function PlanCard({
 type Mode = "key" | "all" | "esc";
 
 /** 验收卡：秘书初筛通过后等你拍板——满意归档 / 补充要求返工（同群改稿）。 */
-function ReviewCard({ reviewSince, artifacts, onConfirm, onRework }: {
-  reviewSince?: string | null;
+function ReviewCard({ status, acceptedAt, artifacts, onAccept, onArchive, onRework }: {
+  status: string; acceptedAt?: string | null;
   artifacts: Array<{ taskId: string; name: string }>;
-  onConfirm: () => void; onRework: (feedback: string) => void;
+  onAccept: () => void; onArchive: () => void; onRework: (feedback: string) => void;
 }) {
   const [mode, setMode] = useState<"idle" | "rework">("idle");
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
+  const done = status === "accepted";
 
+  // 倒计时只在**已验收**后起算——未确认的任务永远等你，系统不替你验收
   const left = (() => {
-    if (!reviewSince) return null;
-    const ms = 24 * 3600_000 - (Date.now() - Date.parse(reviewSince));
+    if (!done || !acceptedAt) return null;
+    const ms = 24 * 3600_000 - (Date.now() - Date.parse(acceptedAt));
     if (ms <= 0) return "即将自动归档";
     const h = Math.floor(ms / 3600_000);
     return h >= 1 ? `${h} 小时后自动归档` : `${Math.max(1, Math.round(ms / 60_000))} 分钟后自动归档`;
   })();
 
   return (
-    <div className="reviewcard">
-      <div className="rh">✅ 任务已完成，等你确认验收</div>
+    <div className={`reviewcard ${done ? "done" : ""}`}>
+      <div className="rh">{done ? "☑ 已验收 · 待归档" : "✅ 任务已完成，等你确认验收"}</div>
       <div className="rb">
         <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-          秘书只做了初筛（产物是否齐全、格式是否符合）——这活儿办得对不对由你说了算。
+          {done
+            ? "验收通过了。任务留在这里方便你继续用产物或再提要求；归档只是收进历史。"
+            : "秘书只做了初筛（产物是否齐全、格式是否符合）——这活儿办得对不对由你说了算。"}
         </div>
         {artifacts.length > 0 && (
           <div style={{ marginBottom: 6 }}>
@@ -265,9 +269,19 @@ function ReviewCard({ reviewSince, artifacts, onConfirm, onRework }: {
       </div>
       {mode === "idle" ? (
         <div className="rf">
-          <button className="btn primary sm" disabled={busy}
-                  onClick={() => { setBusy(true); onConfirm(); }}>满意，归档</button>
-          <button className="btn sm" onClick={() => setMode("rework")}>不满意，补充要求…</button>
+          {done ? (
+            <>
+              <button className="btn sm" disabled={busy}
+                      onClick={() => { setBusy(true); onArchive(); }}>归档</button>
+              <button className="btn sm" onClick={() => setMode("rework")}>再提要求…</button>
+            </>
+          ) : (
+            <>
+              <button className="btn primary sm" disabled={busy}
+                      onClick={() => { setBusy(true); onAccept(); }}>验收通过</button>
+              <button className="btn sm" onClick={() => setMode("rework")}>不满意，补充要求…</button>
+            </>
+          )}
           {left && <span className="muted" style={{ marginLeft: "auto" }}>{left}</span>}
         </div>
       ) : (
@@ -322,15 +336,15 @@ function FailureCard({ payload, onRetry }: {
 }
 
 export function GroupView({
-  org, title, status, reviewSince, events, tasks, plan, focusTaskId,
-  onReply, onApprove, onReject, onRetry, onConfirm, onRework,
+  org, title, status, acceptedAt, events, tasks, plan, focusTaskId,
+  onReply, onApprove, onReject, onRetry, onAccept, onArchive, onRework,
 }: {
-  org: string; title: string | null; status: string; reviewSince?: string | null;
+  org: string; title: string | null; status: string; acceptedAt?: string | null;
   events: MiloEvent[]; tasks: TaskRow[]; plan: PlanStep[] | null;
   focusTaskId?: string | null;
   onReply: (taskId: string, answer: string) => void;
   onApprove: () => void; onReject: () => void; onRetry: () => void;
-  onConfirm: () => void; onRework: (feedback: string) => void;
+  onAccept: () => void; onArchive: () => void; onRework: (feedback: string) => void;
 }) {
   const [mode, setMode] = useState<Mode>("key");
   const pending = new Set(tasks.filter((t) => t.state === "input_required").map((t) => t.task_id));
@@ -464,14 +478,16 @@ export function GroupView({
             </div>
           );
         })}
-        {status === "review" && (
-          <ReviewCard reviewSince={reviewSince}
+        {(status === "review" || status === "accepted") && (
+          // key 随状态变化 → 卡片重新挂载：否则上一动作的 busy 标志会残留，
+          // 验收通过后归档按钮点不动（实测踩到）
+          <ReviewCard key={status} status={status} acceptedAt={acceptedAt}
                       artifacts={events.flatMap((e) =>
                         Array.isArray(e.payload?.artifacts) && e.task_id
                           ? e.payload.artifacts.filter((a: any) => a?.name && a?.uri)
                               .map((a: any) => ({ taskId: e.task_id!, name: a.name }))
                           : [])}
-                      onConfirm={onConfirm} onRework={onRework} />
+                      onAccept={onAccept} onArchive={onArchive} onRework={onRework} />
         )}
         <div ref={endRef} />
       </div>

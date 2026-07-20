@@ -38,7 +38,7 @@ export interface MiloEvent {
 export interface GroupSummary {
   group_id: string;
   title: string | null;
-  status: "active" | "waiting" | "review" | "archived" | "failed";
+  status: "active" | "waiting" | "review" | "accepted" | "archived" | "failed";
   review_since?: string | null;
   events: number;
   pending: number;
@@ -230,7 +230,7 @@ export const api = {
     const qs = q.toString();
     return fetch(`/api/orgs/${org}/groups/${gid}${qs ? "?" + qs : ""}`).then(j) as Promise<{
       group_id: string; title: string | null; status: string;
-      review_since?: string | null;
+      review_since?: string | null; accepted_at?: string | null;
       events: MiloEvent[]; tasks: TaskRow[];
     }>;
   },
@@ -251,11 +251,16 @@ export const api = {
   plan: (org: string, gid: string): Promise<{ steps: PlanStep[] }> =>
     fetch(`/api/orgs/${org}/groups/${gid}/plan`).then(j),
 
-  confirmGroup: (org: string, gid: string, note = "") =>
-    fetch(`/api/orgs/${org}/groups/${gid}/confirm`, {
+  /** 验收通过（不归档）——归档是独立动作。 */
+  acceptGroup: (org: string, gid: string, note = "") =>
+    fetch(`/api/orgs/${org}/groups/${gid}/accept`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ note }),
     }).then(j) as Promise<{ status: string }>,
+
+  archiveGroup: (org: string, gid: string) =>
+    fetch(`/api/orgs/${org}/groups/${gid}/archive`, { method: "POST" })
+      .then(j) as Promise<{ status: string }>,
 
   reworkGroup: (org: string, gid: string, feedback: string) =>
     fetch(`/api/orgs/${org}/groups/${gid}/rework`, {
