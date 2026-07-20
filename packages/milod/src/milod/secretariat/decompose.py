@@ -12,9 +12,12 @@ from typing import Any
 
 from milod.models import Budget, OutputSpec, TaskEnvelope
 
-PLAN_PROMPT = """你是一个组织的秘书长，负责把组长的一句话需求分解为可派发的任务。
+PLAN_PROMPT = """你是一个组织的秘书，负责把组长的一句话需求分解为可派发的任务。
 
-可用成员及其能力：
+**可选能力 ID（capability 只能从这里选，逐字复制）：**
+{caps}
+
+（供参考的成员与其能力，成员名不是能力 ID、不要填进 capability）：
 {roster}
 
 组长的需求：{request}
@@ -59,7 +62,9 @@ def _extract_json(text: str) -> dict[str, Any]:
 
 
 def build_prompt(request: str, roster: Roster, max_steps: int = 3) -> str:
-    return PLAN_PROMPT.format(roster=roster.render(), request=request, max_steps=max_steps)
+    caps = "\n".join(f"- {c}" for c in sorted(roster.capabilities)) or "（暂无可用能力）"
+    return PLAN_PROMPT.format(caps=caps, roster=roster.render(),
+                              request=request, max_steps=max_steps)
 
 
 def parse_plan(text: str, roster: Roster, *, group_id: str | None = None) -> list[TaskEnvelope]:
@@ -69,11 +74,18 @@ def parse_plan(text: str, roster: Roster, *, group_id: str | None = None) -> lis
     if not isinstance(steps, list) or not steps:
         raise DecomposeError("分解结果缺少 steps")
 
+    by_member = {n: caps for n, caps in roster.members}
     envelopes: list[TaskEnvelope] = []
     for i, s in enumerate(steps):
         cap = str(s.get("capability", "")).strip()
         if cap not in roster.capabilities:
-            raise DecomposeError(f"第 {i + 1} 步能力 {cap!r} 不在现有能力集内")
+            # 常见错误：模型把成员名填进 capability——自愈映射到该成员的首个能力
+            if cap in by_member and by_member[cap]:
+                cap = by_member[cap][0]
+            else:
+                raise DecomposeError(
+                    f"第 {i + 1} 步能力 {cap!r} 不在现有能力集内；"
+                    f"可选能力：{sorted(roster.capabilities)}")
         env = TaskEnvelope(
             capability=cap,
             objective=str(s.get("objective", "")).strip(),

@@ -12,7 +12,7 @@ const STATE_ZH: Record<string, string> = {
 };
 const GROUP_ZH: Record<string, [string, string]> = {
   active: ["进行中", "ok"], waiting: ["待你拍板", "warn"],
-  archived: ["已归档", ""], failed: ["失败", "crit"],
+  archived: ["已归档", ""], failed: ["分解/执行失败", "crit"],
 };
 
 /** content 缺失时的兜底：挑出可读字段，绝不把原始 JSON 甩给用户。 */
@@ -228,14 +228,43 @@ function PlanCard({
 
 type Mode = "key" | "all" | "esc";
 
+/** 分解/派单失败卡：把死胡同变成下一步动作（错误 + 能力缺口引导 + 重试）。 */
+function FailureCard({ payload, onRetry }: {
+  payload: Record<string, any>; onRetry: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="failcard">
+      <div className="fh">⚠ {String(payload.error ?? "执行失败")}</div>
+      {payload.hint && <div className="fb">{String(payload.hint)}</div>}
+      {Array.isArray(payload.available_capabilities) && payload.available_capabilities.length > 0 && (
+        <div className="fb">
+          {payload.available_capabilities.map((c: string) => (
+            <span key={c} className="chip" style={{ marginRight: 4 }}>{c}</span>
+          ))}
+        </div>
+      )}
+      {payload.retriable && (
+        <div className="ff">
+          <button className="btn primary sm" disabled={busy}
+                  onClick={() => { setBusy(true); onRetry(); }}>
+            {busy ? "重试中…" : "重试分解"}
+          </button>
+          <span className="muted">用原始需求重新分解；也可以在秘书对话里改写需求重新下达</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GroupView({
-  org, title, status, events, tasks, plan, focusTaskId, onReply, onApprove, onReject,
+  org, title, status, events, tasks, plan, focusTaskId, onReply, onApprove, onReject, onRetry,
 }: {
   org: string; title: string | null; status: string;
   events: MiloEvent[]; tasks: TaskRow[]; plan: PlanStep[] | null;
   focusTaskId?: string | null;
   onReply: (taskId: string, answer: string) => void;
-  onApprove: () => void; onReject: () => void;
+  onApprove: () => void; onReject: () => void; onRetry: () => void;
 }) {
   const [mode, setMode] = useState<Mode>("key");
   const pending = new Set(tasks.filter((t) => t.state === "input_required").map((t) => t.task_id));
@@ -328,7 +357,10 @@ export function GroupView({
             );
           }
           if (e.type === "system") {
-            const msg = e.content || e.payload?.msg || e.payload?.error || "";
+            if (e.payload?.error) {
+              return <FailureCard key={it.key} payload={e.payload} onRetry={onRetry} />;
+            }
+            const msg = e.content || e.payload?.msg || "";
             return msg ? <div key={it.key} className="sys">{String(msg)}</div> : null;
           }
           const tag = TAG[e.type];

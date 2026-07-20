@@ -249,6 +249,10 @@ export const api = {
   plan: (org: string, gid: string): Promise<{ steps: PlanStep[] }> =>
     fetch(`/api/orgs/${org}/groups/${gid}/plan`).then(j),
 
+  retryPlan: (org: string, gid: string) =>
+    fetch(`/api/orgs/${org}/groups/${gid}/retry`, { method: "POST" })
+      .then(j) as Promise<{ status: string }>,
+
   approve: (org: string, gid: string, edits?: Record<string, any>) =>
     fetch(`/api/orgs/${org}/groups/${gid}/approve`, {
       method: "POST", headers: { "Content-Type": "application/json" },

@@ -96,12 +96,9 @@ class Hub:
         office.start_group(group_id, request)  # 落标题 + 记录组长需求（与 CLI 共用）
 
         try:
-            plan_text = await _ask_llm(org, office.plan_prompt(request))
-            envelopes = office.parse_plan(plan_text, group_id)
-        except (DecomposeError, Exception) as e:  # noqa: BLE001
-            office._emit(MiloEvent(
-                group_id=group_id, type=EventType.SYSTEM, actor="system",
-                payload={"error": f"分解失败：{e}"}))
+            envelopes = await self._decompose(office, request, group_id)
+        except Exception as e:  # noqa: BLE001
+            self._fail_group(office, group_id, request, e)
             return
 
         if envelopes:
@@ -120,6 +117,64 @@ class Hub:
 
         await self._run_steps(office, envelopes, group_id)
         office.sync_group_status(group_id)
+
+    async def _decompose(self, office: Office, request: str, group_id: str) -> list:
+        """分解需求。失败时把错误回喂模型重试一次——LLM 看到"X 不是能力、
+        可选能力是 …"通常一次就能改对（实测常见错误：把成员名当能力 ID）。
+        """
+        prompt = office.plan_prompt(request)
+        try:
+            return office.parse_plan(await _ask_llm(org=office.org, prompt=prompt), group_id)
+        except DecomposeError as first:
+            office._emit(MiloEvent(
+                group_id=group_id, type=EventType.SYSTEM, actor="secretariat",
+                payload={"msg": f"分解结果不合法，正在重试：{first}"}))
+            retry = (f"{prompt}\n\n上一次输出不合法：{first}\n"
+                     f"请严格只用上面列出的能力 ID（不是成员名），重新输出 JSON。")
+            return office.parse_plan(await _ask_llm(org=office.org, prompt=retry), group_id)
+
+    async def retry_decompose(self, org: str, group_id: str) -> bool:
+        """重试分解（P0 死锁出口）：用原始需求或用户改写后的需求重新走一遍。"""
+        office = await self.office(org)
+        events = office.store.group_events(group_id)
+        request = next((e["content"] for e in events
+                        if e["type"] == "chat" and e["actor"] == "owner" and e["content"]), None)
+        if not request:
+            return False
+        office.store.set_group_status(group_id, "active")
+        task = asyncio.create_task(self._replan(office, group_id, request))
+        self.track(f"{group_id}-replan", task)
+        return True
+
+    def _fail_group(self, office: Office, group_id: str, request: str, err: Exception) -> None:
+        """分解失败的统一收口：转 failed（不冒充进行中）+ 留重试入口 + 能力缺口引导。
+
+        缺口引导（P2）：团队能力表就在手边，与其只报错，不如告诉用户
+        "现在能干的是这些、缺的可能是那个"，把死胡同变成下一步动作。
+        """
+        caps = sorted(office.roster().capabilities)
+        office._emit(MiloEvent(
+            group_id=group_id, type=EventType.SYSTEM, actor="system",
+            payload={"error": f"分解失败：{err}", "retriable": True, "request": request,
+                     "available_capabilities": caps,
+                     "hint": ("团队现有能力：" + "、".join(caps) if caps else "团队还没有成员")
+                             + "。若这项工作确实无人能做，到「Agent 市场」下载合适的模板再招募，"
+                               "或改写需求后重试分解。"}))
+        office.store.set_group_status(group_id, "failed")
+
+    async def _replan(self, office: Office, group_id: str, request: str) -> None:
+        try:
+            envelopes = await self._decompose(office, request, group_id)
+        except Exception as e:  # noqa: BLE001
+            self._fail_group(office, group_id, request, e)
+            return
+        office.store.set_group_title(group_id, short_title(envelopes[0].objective))
+        office._emit(MiloEvent(
+            group_id=group_id, type=EventType.SYSTEM, actor="secretariat",
+            payload={"plan": [{"capability": e.capability, "objective": e.objective,
+                               "task_id": e.task_id} for e in envelopes], "approved": False}))
+        office.store.save_pending_plan(group_id, envelopes)
+        office.store.set_group_status(group_id, "waiting")
 
     # ---- 计划批准 ------------------------------------------------------
     async def pending_plan(self, org: str, group_id: str) -> list | None:
@@ -215,7 +270,11 @@ class Hub:
             except NoMemberForTask as e:
                 office._emit(MiloEvent(
                     group_id=group_id, task_id=env.task_id, type=EventType.SYSTEM,
-                    actor="secretariat", payload={"error": str(e)}))
+                    actor="secretariat",
+                    payload={"error": str(e), "available_capabilities": e.available,
+                             "hint": f"没有成员声明能力 {e.capability}——"
+                                     f"到「Agent 市场」找具备该能力的模板招募，或改写需求重试。"}))
+                office.store.set_group_status(group_id, "failed")
                 return
 
             state = await self._await_settled(office, env.task_id)
@@ -248,7 +307,7 @@ class Hub:
             await office.collect(task_id)
 
 
-async def _ask_llm(org: str, prompt: str) -> str:
+async def _ask_llm(*, org: str, prompt: str) -> str:
     import httpx
 
     b = yaml.safe_load((org_dir(org) / "bindings.yaml").read_text(encoding="utf-8"))["model"]

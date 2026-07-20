@@ -843,6 +843,14 @@ async def get_plan(org: str, group_id: str) -> dict[str, Any]:
     }
 
 
+@app.post("/api/orgs/{org}/groups/{group_id}/retry")
+async def retry_group(org: str, group_id: str) -> dict[str, Any]:
+    """重试分解（分解失败后的出口）：用原始需求重新分解。"""
+    if not await hub.retry_decompose(org, group_id):
+        raise HTTPException(404, "该任务群没有可重试的需求")
+    return {"group_id": group_id, "status": "retrying"}
+
+
 @app.post("/api/orgs/{org}/groups/{group_id}/approve")
 async def approve_plan(org: str, group_id: str, body: ApproveRequest) -> dict[str, Any]:
     """批准计划并开始执行；可带 edits 微调步骤目标。"""

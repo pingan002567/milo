@@ -148,6 +148,13 @@ export default function App() {
     setPlan(null);
   };
 
+  const onRetry = async () => {
+    if (!gid) return;
+    await api.retryPlan(ORG, gid).catch(() => {});
+    await refreshLists();
+    openGroup(gid);
+  };
+
   const onReject = async () => {
     if (!gid) return;
     await api.reject(ORG, gid, "暂不执行");
@@ -224,7 +231,8 @@ export default function App() {
               <button key={g.group_id}
                       className={`gitem ${gid === g.group_id ? "on" : ""}`}
                       onClick={() => openGroup(g.group_id)}>
-                <span className={`gdot ${g.status === "waiting" ? "waiting" : "active"}`} />
+                <span className={`gdot ${g.status === "waiting" ? "waiting"
+                  : g.status === "failed" ? "failed" : "active"}`} />
                 <span className="gt">{g.title || g.group_id}</span>
                 {g.pending > 0 && <span className="gbdg">@你</span>}
               </button>
@@ -294,7 +302,8 @@ export default function App() {
         {screen === "group" && gid && (
           <GroupView org={ORG} title={title} status={gstatus} events={events} tasks={tasks}
                      plan={plan} focusTaskId={focusTask}
-                     onReply={onReply} onApprove={onApprove} onReject={onReject} />
+                     onReply={onReply} onApprove={onApprove} onReject={onReject}
+                     onRetry={onRetry} />
         )}
       </main>
 
