@@ -389,3 +389,37 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 /* 左栏私聊区块 */
 .dmsec { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
 .ava.sm { width: 18px; height: 18px; font-size: 9px; flex: none; }
+
+/* ─── 私聊会话：对齐 DeerFlow 官方前端（ai-elements/message + reasoning）─── */
+.dfmsgs { display: flex; flex-direction: column; gap: 18px; max-width: 760px; }
+.dfmsg { display: flex; flex-direction: column; width: 100%; position: relative; }
+.dfmsg.user { align-items: flex-end; }
+/* 用户消息：右对齐灰气泡、纯文本 verbatim（官方：输入不按 Markdown 解析） */
+.dfbubble { background: var(--panel-2); color: var(--ink); border-radius: 10px;
+  padding: 10px 14px; max-width: 85%; font-size: 13px;
+  white-space: pre-wrap; word-break: break-word; }
+/* 成员消息：全宽文档流 Markdown，无气泡 */
+.dfcontent { width: 100%; font-size: 13px; }
+/* 思考条（官方 Reasoning 形态） */
+.reason { margin-bottom: 6px; }
+.reason-trigger { display: flex; align-items: center; gap: 7px; border: none;
+  background: none; color: var(--ink-3); font-size: 12.5px; cursor: pointer; padding: 0; }
+.reason-trigger:hover { color: var(--ink); }
+.reason-brain { font-size: 13px; }
+.reason-chevron { transition: transform .15s; display: inline-block; }
+.reason-chevron.open { transform: rotate(180deg); }
+.reason-content { margin-top: 8px; color: var(--ink-3); font-size: 12px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word; border-left: 2px solid var(--line);
+  padding-left: 12px; max-height: 280px; overflow-y: auto; }
+@keyframes shimmer-x { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.shimmer { background: linear-gradient(90deg, var(--ink-3) 40%, var(--ink) 50%, var(--ink-3) 60%);
+  background-size: 200% 100%; -webkit-background-clip: text; background-clip: text;
+  color: transparent; animation: shimmer-x 1.6s linear infinite; }
+/* 悬停浮出工具条（复制） */
+.dftoolbar { position: absolute; bottom: -22px; left: 0; opacity: 0;
+  transition: opacity .25s .2s; }
+.dfmsg:hover .dftoolbar { opacity: 1; }
+.dfmsg.user .dftoolbar { left: auto; right: 0; }
+.msgcopy { border: 1px solid var(--line); background: var(--panel); color: var(--ink-3);
+  border-radius: 6px; font-size: 11px; padding: 2px 9px; cursor: pointer; }
+.msgcopy:hover { color: var(--ink); border-color: var(--ink-3); }

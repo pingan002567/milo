@@ -3,12 +3,95 @@ import { api, type MiloEvent } from "../lib/api";
 import { Md } from "./Md";
 
 /**
- * 成员私聊——左栏常驻会话，主区对话形态（与秘书页一致）。
- * 全权调教通道（用户决策：私聊里不设任何限制）：你在这里的指示，
- * 成员可据此修改自己的人设/描述/能力/权限（自改工具带线程门禁，
- * 只在私聊线程可用——任务中被注入也无法自改）。
- * 会话即特殊群 dm-<name>：历史走群接口，实时走 WS（App 转入）。
+ * 成员私聊——会话形态对齐 DeerFlow 官方前端（ai-elements/message + reasoning）：
+ * 无头像；用户消息右对齐灰气泡、纯文本 verbatim（官方注释：输入不是 Markdown，
+ * 按 MD 解析会毁掉粘贴的代码/日志）；成员消息全宽 Markdown 文档流；
+ * 思考过程 = 🧠 折叠条（流式时 "思考中…(Ns)" 计时，完成后 "思考了 N 秒"可展开）；
+ * 悬停浮出复制按钮。
+ *
+ * 数据映射：owner chat → user；member chat → assistant；
+ * 回复前累积的 status（trace 流）→ 该回复的 reasoning 块。
  */
+
+type Turn =
+  | { kind: "user"; key: string; text: string }
+  | { kind: "assistant"; key: string; text: string; reasoning: string; seconds: number | null }
+  | { kind: "thinking"; key: string; reasoning: string; startTs: string };
+
+function buildTurns(events: MiloEvent[]): Turn[] {
+  const turns: Turn[] = [];
+  let buf = "";
+  let bufStart: string | null = null;
+  for (const e of events) {
+    if (e.type === "status") {
+      if (!buf) bufStart = e.ts;
+      buf += String(e.payload?.doing ?? e.content ?? "");
+      continue;
+    }
+    if (e.type !== "chat") continue;
+    const text = String(e.payload?.text ?? e.content ?? "");
+    if (e.actor === "owner") {
+      buf = ""; bufStart = null; // 用户发言重置思考缓冲
+      turns.push({ kind: "user", key: e.event_id, text });
+    } else {
+      const seconds = bufStart
+        ? Math.max(1, Math.round((Date.parse(e.ts) - Date.parse(bufStart)) / 1000))
+        : null;
+      turns.push({ kind: "assistant", key: e.event_id, text, reasoning: buf, seconds });
+      buf = ""; bufStart = null;
+    }
+  }
+  if (buf) {
+    turns.push({ kind: "thinking", key: "live", reasoning: buf, startTs: bufStart! });
+  }
+  return turns;
+}
+
+/** 🧠 思考条：官方 Reasoning 形态（trigger + 可折叠 muted 正文）。 */
+function ReasoningBlock({ reasoning, seconds, streaming }: {
+  reasoning: string; seconds: number | null; streaming: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!streaming) return;
+    const t0 = Date.now();
+    const iv = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(iv);
+  }, [streaming]);
+
+  return (
+    <div className="reason">
+      <button className="reason-trigger" onClick={() => reasoning && setOpen(!open)}>
+        <span className="reason-brain">🧠</span>
+        {streaming ? (
+          <span className="shimmer">思考中…（{elapsed}s）</span>
+        ) : (
+          <span>思考了 {seconds ?? "几"} 秒</span>
+        )}
+        {reasoning && <span className={`reason-chevron ${open ? "open" : ""}`}>⌄</span>}
+      </button>
+      {(open || streaming) && reasoning && (
+        <div className="reason-content">{reasoning.slice(-2000)}</div>
+      )}
+    </div>
+  );
+}
+
+function CopyBtn({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button className="msgcopy" title="复制"
+            onClick={() => {
+              navigator.clipboard?.writeText(text).then(() => {
+                setDone(true); setTimeout(() => setDone(false), 1200);
+              });
+            }}>
+      {done ? "✓ 已复制" : "复制"}
+    </button>
+  );
+}
+
 export function MemberChatView({ org, member, liveEvents }: {
   org: string; member: string; liveEvents: MiloEvent[];
 }) {
@@ -34,19 +117,10 @@ export function MemberChatView({ org, member, liveEvents }: {
     return all;
   }, [history, liveEvents, gid]);
 
-  const { msgs, typing } = useMemo(() => {
-    const msgs = events.filter((e) => e.type === "chat");
-    let typing = "";
-    for (let i = events.length - 1; i >= 0; i--) {
-      const e = events[i];
-      if (e.type === "chat") break;
-      if (e.type === "status") typing = String(e.payload?.doing ?? e.content ?? "") + typing;
-    }
-    return { msgs, typing };
-  }, [events]);
+  const turns = useMemo(() => buildTurns(events), [events]);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); },
-    [msgs.length, typing.length > 0]);
+  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [turns.length,
+    turns[turns.length - 1]?.kind === "thinking" ? (turns[turns.length - 1] as any).reasoning.length : 0]);
 
   const send = async () => {
     const text = input.trim();
@@ -56,9 +130,9 @@ export function MemberChatView({ org, member, liveEvents }: {
       await api.memberDM(org, member, text);
     } catch (e: any) {
       setHistory((prev) => [...prev, {
-        event_id: `local-${Date.now()}`, group_id: gid, type: "system",
+        event_id: `local-${Date.now()}`, group_id: gid, type: "chat",
         actor: "system", ts: new Date().toISOString(),
-        payload: { msg: `发送失败：${String(e?.message ?? e).slice(0, 120)}` },
+        payload: { text: `（发送失败：${String(e?.message ?? e).slice(0, 120)}）` },
       } as MiloEvent]);
     } finally { setSending(false); }
   };
@@ -72,8 +146,8 @@ export function MemberChatView({ org, member, liveEvents }: {
         </div>
       </div>
 
-      <div className="msgs secmsgs">
-        {msgs.length === 0 && !typing && (
+      <div className="dfmsgs secmsgs">
+        {turns.length === 0 && (
           <div className="card" style={{ padding: 18, maxWidth: 640 }}>
             <div style={{ marginBottom: 6 }}>这是你和 {member} 的私聊：</div>
             <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.9 }}>
@@ -83,26 +157,33 @@ export function MemberChatView({ org, member, liveEvents }: {
             </div>
           </div>
         )}
-        {msgs.map((e) => (
-          <div key={e.event_id} className="msg">
-            <span className={`ava ${e.actor === "owner" ? "o" : ""}`}>
-              {e.actor === "owner" ? "你" : member.slice(0, 1).toUpperCase()}
-            </span>
-            <div className="mb">
-              <div className="mh">{e.actor === "owner" ? "你" : member} · {e.ts.slice(11, 19)}</div>
-              <div className="mx"><Md text={String(e.payload?.text ?? e.content ?? "")} /></div>
+        {turns.map((t) => {
+          if (t.kind === "user") {
+            return (
+              <div key={t.key} className="dfmsg user">
+                <div className="dfbubble">{t.text}</div>
+              </div>
+            );
+          }
+          if (t.kind === "thinking") {
+            return (
+              <div key={t.key} className="dfmsg assistant">
+                <ReasoningBlock reasoning={t.reasoning} seconds={null} streaming />
+              </div>
+            );
+          }
+          return (
+            <div key={t.key} className="dfmsg assistant">
+              {t.reasoning && (
+                <ReasoningBlock reasoning={t.reasoning} seconds={t.seconds} streaming={false} />
+              )}
+              <div className="dfcontent">
+                <Md text={t.text} />
+              </div>
+              <div className="dftoolbar"><CopyBtn text={t.text} /></div>
             </div>
-          </div>
-        ))}
-        {typing && (
-          <div className="msg">
-            <span className="ava">{member.slice(0, 1).toUpperCase()}</span>
-            <div className="mb">
-              <div className="mh">{member} · 正在输入…</div>
-              <div className="mx dim">{typing.slice(-160)}</div>
-            </div>
-          </div>
-        )}
+          );
+        })}
         <div ref={endRef} />
       </div>
 
