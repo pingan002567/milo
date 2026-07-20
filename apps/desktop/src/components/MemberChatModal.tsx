@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type MiloEvent } from "../lib/api";
-import { buildTurns, TurnList } from "./Conversation";
+import { buildTurns, Suggestions, TurnList, useStickToBottom } from "./Conversation";
 
 /**
  * 成员私聊——全权调教通道（用户决策：私聊里不设任何限制）。
@@ -13,7 +13,6 @@ export function MemberChatView({ org, member, liveEvents }: {
   const [history, setHistory] = useState<MiloEvent[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const gid = `dm-${member}`;
 
@@ -41,9 +40,10 @@ export function MemberChatView({ org, member, liveEvents }: {
     await api.stopTurn(org, member).catch(() => {});
   };
 
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [turns.length,
-    turns[turns.length - 1]?.kind === "thinking"
-      ? (turns[turns.length - 1] as any).reasoning.length : 0]);
+  // 贴底滚动：用户向上翻看历史时不再被强行拉回（官方 StickToBottom 语义）
+  const { boxRef, atBottom, onScroll, scrollToBottom } = useStickToBottom(
+    `${turns.length}:${turns[turns.length - 1]?.kind === "thinking"
+      ? (turns[turns.length - 1] as any).reasoning.length : 0}`);
 
   const send = async () => {
     const text = input.trim();
@@ -74,19 +74,14 @@ export function MemberChatView({ org, member, liveEvents }: {
         </div>
       </div>
 
-      <div className="dfmsgs secmsgs">
+      <div className="dfmsgs secmsgs" ref={boxRef} onScroll={onScroll}>
         {turns.length === 0 && (
           <div className="card" style={{ padding: 18, maxWidth: 640 }}>
             <div style={{ marginBottom: 6 }}>这是你和 {member} 的私聊：</div>
-            <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.9 }}>
-              「介绍一下你自己和你的工作方式」<br />
-              「以后写代码注释一律用中文，把这条写进你的人设」<br />
-              「把你的描述改成'专注数据管道的后端'」
-            </div>
+            <Suggestions items={["介绍一下你自己和你的工作方式", "以后写代码注释一律用中文，写进你的人设"]} onPick={(s) => setInput(s)} />
           </div>
         )}
         <TurnList turns={turns} onRate={(eid, r) => api.feedback(org, gid, eid, r).catch(() => {})} />
-        <div ref={endRef} />
       </div>
 
       {files.length > 0 && (
@@ -99,15 +94,29 @@ export function MemberChatView({ org, member, liveEvents }: {
           ))}
         </div>
       )}
+      {!atBottom && (
+        <button className="tobottom" onClick={scrollToBottom} title="回到底部">↓ 最新</button>
+      )}
       <div className="composer seccomposer"
            onDragOver={(e) => e.preventDefault()}
            onDrop={(e) => {
              e.preventDefault();
              setFiles([...files, ...Array.from(e.dataTransfer.files)]);
            }}>
-        <input placeholder={`跟 ${member} 说点什么…（Enter 发送）`} value={input}
-               onChange={(e) => setInput(e.target.value)}
-               onKeyDown={(e) => e.key === "Enter" && send()} />
+        <textarea className="composer-ta" rows={1}
+               placeholder={`跟 ${member} 说点什么…（Enter 发送，Shift+Enter 换行）`} value={input}
+               onChange={(e) => {
+                 setInput(e.target.value);
+                 const el = e.currentTarget;
+                 el.style.height = "auto";
+                 el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+               }}
+               onKeyDown={(e) => {
+                 // 官方键位：Enter 发送、Shift+Enter 换行；输入法组字中不拦截
+                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                   e.preventDefault(); send();
+                 }
+               }} />
         {streaming ? (
           <button className="btn stopbtn" onClick={stop} title="停止当前回合">■ 停止</button>
         ) : (

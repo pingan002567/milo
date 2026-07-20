@@ -41,6 +41,24 @@ function splitRow(line: string): string[] {
   return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
 }
 
+function CodeBlock({ lang, code }: { lang: string; code: string }) {
+  const [copied, setCopied] = React.useState(false);
+  return (
+    <div className="md-code-block">
+      <div className="md-code-head">
+        <span className="md-code-lang">{lang || "text"}</span>
+        <button className="md-code-copy"
+                onClick={() => {
+                  navigator.clipboard?.writeText(code).then(() => {
+                    setCopied(true); setTimeout(() => setCopied(false), 1200);
+                  });
+                }}>{copied ? "✓ 已复制" : "复制"}</button>
+      </div>
+      <pre className="md-pre">{code}</pre>
+    </div>
+  );
+}
+
 export function Md({ text }: { text: string }) {
   const lines = String(text ?? "").split("\n");
   const blocks: React.ReactNode[] = [];
@@ -50,8 +68,9 @@ export function Md({ text }: { text: string }) {
   while (i < lines.length) {
     const line = lines[i];
 
-    // 代码围栏
+    // 代码围栏（官方 code-block 形态：语言标签 + 复制按钮）
     if (line.trim().startsWith("```")) {
+      const lang = line.trim().slice(3).trim();
       const buf: string[] = [];
       i += 1;
       while (i < lines.length && !lines[i].trim().startsWith("```")) {
@@ -59,7 +78,7 @@ export function Md({ text }: { text: string }) {
         i += 1;
       }
       i += 1; // 跳过收尾围栏
-      blocks.push(<pre key={key++} className="md-pre">{buf.join("\n")}</pre>);
+      blocks.push(<CodeBlock key={key++} lang={lang} code={buf.join("\n")} />);
       continue;
     }
 

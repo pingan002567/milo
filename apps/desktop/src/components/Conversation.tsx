@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { MiloEvent } from "../lib/api";
 import { Md } from "./Md";
 
@@ -13,6 +13,49 @@ export type Turn =
   | { kind: "assistant"; key: string; text: string; reasoning: string; seconds: number | null;
       tokens?: number | null; todos?: Array<{ content: string; status: string }> }
   | { kind: "thinking"; key: string; reasoning: string; startTs: string };
+
+/**
+ * 贴底滚动（借鉴官方 ai-elements/conversation 的 StickToBottom 语义）：
+ * 只在用户本来就在底部时才跟随新内容；用户向上翻看历史时**不再强行拉回**，
+ * 改为浮出「回到底部」。此前是无条件 scrollIntoView——流式输出时想往上看
+ * 历史会被不停拽回来。
+ */
+export function useStickToBottom(dep: unknown) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [atBottom, setAtBottom] = useState(true);
+
+  const onScroll = useCallback(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  }, []);
+
+  useEffect(() => {
+    const el = boxRef.current;
+    if (el && atBottom) el.scrollTop = el.scrollHeight;
+  }, [dep, atBottom]);
+
+  const scrollToBottom = useCallback(() => {
+    const el = boxRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    setAtBottom(true);
+  }, []);
+
+  return { boxRef, atBottom, onScroll, scrollToBottom };
+}
+
+/** 空态建议（官方 suggestion 形态）：点一下即发，不用手打。 */
+export function Suggestions({ items, onPick }: {
+  items: string[]; onPick: (s: string) => void;
+}) {
+  return (
+    <div className="suggests">
+      {items.map((s) => (
+        <button key={s} className="suggest" onClick={() => onPick(s)}>{s}</button>
+      ))}
+    </div>
+  );
+}
 
 /** TODO 清单（harness TodoMiddleware 的 write_todos 产物）：把一团思考变成可勾选计划。 */
 export function TodoPanel({ todos }: { todos: Array<{ content: string; status: string }> }) {
