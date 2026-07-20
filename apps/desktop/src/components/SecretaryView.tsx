@@ -53,7 +53,7 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
 
   return (
     <div className="secpage">
-      <div className="gchead">
+      <div className="gchead" data-tauri-drag-region>
         <div>
           <b>秘书</b>
           <div className="gcsub">你的系统操作面：问团队、看进展、派活，都在这里说</div>

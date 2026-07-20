@@ -55,7 +55,7 @@ export function MemberChatView({ org, member, liveEvents }: {
 
   return (
     <div className="secpage">
-      <div className="gchead">
+      <div className="gchead" data-tauri-drag-region>
         <div>
           <b>私聊 · {member}</b>
           <div className="gcsub">调教通道：考察、立规矩、让它自改人设与档案——不设限制</div>

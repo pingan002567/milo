@@ -383,7 +383,7 @@ export function GroupView({
 
   return (
     <>
-      <div className="gchead">
+      <div className="gchead" data-tauri-drag-region>
         <div>
           <b>{title || "任务群"}</b>
           <div className="gcsub">

@@ -202,7 +202,10 @@ export default function App() {
     <div className="app">
       {/* ── 左栏：功能导航 + 任务群列表 ── */}
       <aside className="side">
-        <div className="brand">Milo</div>
+        {/* titleBarStyle=Overlay 无原生标题栏：必须显式声明拖拽区，
+            否则整个窗口拖不动。Tauri 只在 mousedown 的 target 自身带该属性时
+            才拖拽，所以内部按钮/输入不受影响。 */}
+        <div className="brand" data-tauri-drag-region>Milo</div>
         <OrgSwitcher org={ORG} orgs={orgs} onSwitch={switchOrg}
                      onCreated={(slug) => {
                        api.orgs().then((r) => setOrgs(r.orgs)).catch(() => {});
@@ -291,6 +294,7 @@ export default function App() {
 
       {/* ── 中栏：主内容 ── */}
       <main className="main">
+        <div className="dragbar" data-tauri-drag-region />
         {screen === "chat" && <SecretaryView org={ORG} liveEvents={secEvents} />}
 
         {screen === "dm" && dmTarget && (
