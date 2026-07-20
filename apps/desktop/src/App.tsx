@@ -38,6 +38,7 @@ export default function App() {
   const [dmTarget, setDmTarget] = useState<string | null>(null);   // 私聊对象
   const [dms, setDms] = useState<{ group_id: string; member: string }[]>([]);  // 私聊会话列表
   const [inspOpen, setInspOpen] = useState(() => localStorage.getItem("milo.insp") !== "0");
+  const [arcOpen, setArcOpen] = useState(() => localStorage.getItem("milo.arc") === "1");
   const [dmEvents, setDmEvents] = useState<MiloEvent[]>([]);       // 私聊实时流
   const seen = useRef(new Set<string>());
 
@@ -158,6 +159,12 @@ export default function App() {
       (g.title ?? g.group_id).toLowerCase().includes(filter.toLowerCase())),
     [groups, filter],
   );
+  // 成功任务自动归档（全终态即 archived）——归档量会持续增长，
+  // 与进行中分区展示，避免活跃任务被淹没
+  const liveGroups = useMemo(
+    () => shownGroups.filter((g) => g.status !== "archived"), [shownGroups]);
+  const archivedGroups = useMemo(
+    () => shownGroups.filter((g) => g.status === "archived"), [shownGroups]);
   const pendingTotal = todos.length;
 
   return (
@@ -212,17 +219,40 @@ export default function App() {
           <div className="grplabel">任务群</div>
           <input className="gsearch" placeholder="搜索任务群…" value={filter}
                  onChange={(e) => setFilter(e.target.value)} />
-          <div className="glist">
-            {shownGroups.map((g) => (
+          <div className="glist grouplist">
+            {liveGroups.map((g) => (
               <button key={g.group_id}
-                      className={`gitem ${gid === g.group_id ? "on" : ""} ${g.status === "archived" ? "archived" : ""}`}
+                      className={`gitem ${gid === g.group_id ? "on" : ""}`}
                       onClick={() => openGroup(g.group_id)}>
-                <span className={`gdot ${g.status === "waiting" ? "waiting" : g.status === "active" ? "active" : ""}`} />
+                <span className={`gdot ${g.status === "waiting" ? "waiting" : "active"}`} />
                 <span className="gt">{g.title || g.group_id}</span>
                 {g.pending > 0 && <span className="gbdg">@你</span>}
               </button>
             ))}
-            {shownGroups.length === 0 && <div className="foot">暂无任务群</div>}
+            {liveGroups.length === 0 && (
+              <div className="foot">{filter ? "无匹配的进行中任务" : "没有进行中的任务"}</div>
+            )}
+
+            {archivedGroups.length > 0 && (
+              <>
+                <button className="arctoggle"
+                        onClick={() => {
+                          const v = !(arcOpen || !!filter);
+                          setArcOpen(v); localStorage.setItem("milo.arc", v ? "1" : "0");
+                        }}>
+                  <span className={`arcchev ${(arcOpen || filter) ? "open" : ""}`}>›</span>
+                  已归档 <span className="arccount">{archivedGroups.length}</span>
+                </button>
+                {(arcOpen || filter) && archivedGroups.map((g) => (
+                  <button key={g.group_id}
+                          className={`gitem archived ${gid === g.group_id ? "on" : ""}`}
+                          onClick={() => openGroup(g.group_id)}>
+                    <span className="gdot" />
+                    <span className="gt">{g.title || g.group_id}</span>
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         </div>
         <div className="foot">桌面壳 v0.1 · {members.length} 名成员</div>

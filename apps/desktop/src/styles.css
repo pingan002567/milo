@@ -455,3 +455,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
   background: var(--ink-3); }
 .tldot.ok { background: var(--green); } .tldot.warn { background: var(--amber); }
 .tldot.crit { background: var(--crit); }
+
+/* 任务群：进行中 / 已归档 分区 */
+.arctoggle { display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 8px;
+  padding: 6px 10px; border: none; background: none; color: var(--faint);
+  font-size: 11px; letter-spacing: .06em; cursor: pointer; border-top: 1px solid var(--line); }
+.arctoggle:hover { color: var(--ink-3); }
+.arcchev { display: inline-block; transition: transform .15s; }
+.arcchev.open { transform: rotate(90deg); }
+.arccount { margin-left: auto; font-family: var(--mono); font-size: 10px; }
