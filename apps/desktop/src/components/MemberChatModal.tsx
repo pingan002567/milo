@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type MiloEvent } from "../lib/api";
-import { buildTurns, OfficialConversation, Suggestions, TurnList } from "./Conversation";
+import {
+  buildTurns, ChatComposer, ChatHeader, OfficialConversation, Suggestions, TurnList,
+} from "./Conversation";
 
 /**
  * 成员私聊——全权调教通道（用户决策：私聊里不设任何限制）。
@@ -63,69 +65,35 @@ export function MemberChatView({ org, member, liveEvents }: {
 
   return (
     <div className="secpage">
-      <div className="gchead" data-tauri-drag-region>
-        <button className="resetbtn" title="重置对话（清空历史，人设不变）"
-                onClick={async () => {
-                  if (!window.confirm("清空这个对话的历史？成员的人设与档案不受影响。")) return;
-                  await api.resetConversation(org, member).catch(() => {});
-                  setHistory([]);
-                }}>↺ 重置</button>
-        <div>
-          <b>私聊 · {member}</b>
-          <div className="gcsub">调教通道：考察、立规矩、让它自改人设与档案——不设限制</div>
-        </div>
-      </div>
+      <ChatHeader
+        name={member}
+        title={`私聊 · ${member}`}
+        subtitle="调教通道：考察、立规矩、让它自改人设与档案——不设限制"
+        onReset={async () => {
+          if (!window.confirm("清空这个对话的历史？成员的人设与档案不受影响。")) return;
+          await api.resetConversation(org, member).catch(() => {});
+          setHistory([]);
+        }} />
 
       <div className="dfmsgs secmsgs">
         <OfficialConversation>
-        {turns.length === 0 && (
-          <div className="card" style={{ padding: 18, maxWidth: 640 }}>
-            <div style={{ marginBottom: 6 }}>这是你和 {member} 的私聊：</div>
-            <Suggestions items={["介绍一下你自己和你的工作方式", "以后写代码注释一律用中文，写进你的人设"]} onPick={(s) => setInput(s)} />
-          </div>
-        )}
-        <TurnList turns={turns} onRate={(eid, r) => api.feedback(org, gid, eid, r).catch(() => {})} />
+          {turns.length === 0 && (
+            <div className="chat-empty">
+              <div className="chat-empty-title">这是你和 {member} 的私聊</div>
+              <div className="chat-empty-sub">立规矩、改人设、派活——这里不设限制。试试：</div>
+              <Suggestions items={["介绍一下你自己和你的工作方式", "以后写代码注释一律用中文，写进你的人设"]} onPick={(s) => setInput(s)} />
+            </div>
+          )}
+          <TurnList turns={turns} onRate={(eid, r) => api.feedback(org, gid, eid, r).catch(() => {})} />
         </OfficialConversation>
       </div>
 
-      {files.length > 0 && (
-        <div className="attachbar">
-          {files.map((f, i) => (
-            <span key={i} className="chip">
-              📎 {f.name}
-              <button className="capx" onClick={() => setFiles(files.filter((_, j) => j !== i))}>×</button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="composer seccomposer"
-           onDragOver={(e) => e.preventDefault()}
-           onDrop={(e) => {
-             e.preventDefault();
-             setFiles([...files, ...Array.from(e.dataTransfer.files)]);
-           }}>
-        <textarea className="composer-ta" rows={1}
-               placeholder={`跟 ${member} 说点什么…（Enter 发送，Shift+Enter 换行）`} value={input}
-               onChange={(e) => {
-                 setInput(e.target.value);
-                 const el = e.currentTarget;
-                 el.style.height = "auto";
-                 el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-               }}
-               onKeyDown={(e) => {
-                 // 官方键位：Enter 发送、Shift+Enter 换行；输入法组字中不拦截
-                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                   e.preventDefault(); send();
-                 }
-               }} />
-        {streaming ? (
-          <button className="btn stopbtn" onClick={stop} title="停止当前回合">■ 停止</button>
-        ) : (
-          <button className="btn primary" disabled={sending || !input.trim()} onClick={send}>
-            {sending ? "发送中…" : "发送"}
-          </button>
-        )}
-      </div>
+      <ChatComposer
+        value={input} onChange={setInput}
+        onSend={send} onStop={stop}
+        streaming={streaming} sending={sending}
+        placeholder={`跟 ${member} 说点什么…（Enter 发送，Shift+Enter 换行）`}
+        files={files} onFiles={setFiles} />
     </div>
   );
 }

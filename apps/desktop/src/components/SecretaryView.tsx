@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type MiloEvent } from "../lib/api";
-import { buildTurns, OfficialConversation, Suggestions, TurnList } from "./Conversation";
+import {
+  buildTurns, ChatComposer, ChatHeader, OfficialConversation, Suggestions, TurnList,
+} from "./Conversation";
 
 /**
  * 秘书对话页——会话形态对齐 DeerFlow 官方前端（与成员私聊共用 Conversation 组件）。
@@ -55,24 +57,22 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
 
   return (
     <div className="secpage">
-      <div className="gchead" data-tauri-drag-region>
-        <button className="resetbtn" title="重置对话（清空历史，人设不变）"
-                onClick={async () => {
-                  if (!window.confirm("清空这个对话的历史？成员的人设与档案不受影响。")) return;
-                  await api.resetConversation(org).catch(() => {});
-                  setHistory([]);
-                }}>↺ 重置</button>
-        <div>
-          <b>秘书</b>
-          <div className="gcsub">你的系统操作面：问团队、看进展、派活，都在这里说</div>
-        </div>
-      </div>
+      <ChatHeader
+        name="秘书" accent
+        title="秘书"
+        subtitle="你的系统操作面：问团队、看进展、派活，都在这里说"
+        onReset={async () => {
+          if (!window.confirm("清空这个对话的历史？成员的人设与档案不受影响。")) return;
+          await api.resetConversation(org).catch(() => {});
+          setHistory([]);
+        }} />
 
       <div className="dfmsgs secmsgs">
         <OfficialConversation>
           {turns.length === 0 && (
-            <div className="card" style={{ padding: 18, maxWidth: 640 }}>
-              <div style={{ marginBottom: 6 }}>我是你的秘书，可以直接吩咐：</div>
+            <div className="chat-empty">
+              <div className="chat-empty-title">我是你的秘书</div>
+              <div className="chat-empty-sub">问团队、看进展、派活，直接吩咐。试试：</div>
               <Suggestions items={["团队现在谁在忙？", "有什么在等我拍板的事？", "市场里有哪些模板？"]} onPick={(s) => setInput(s)} />
             </div>
           )}
@@ -80,44 +80,12 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
         </OfficialConversation>
       </div>
 
-      {files.length > 0 && (
-        <div className="attachbar">
-          {files.map((f, i) => (
-            <span key={i} className="chip">
-              📎 {f.name}
-              <button className="capx" onClick={() => setFiles(files.filter((_, j) => j !== i))}>×</button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="composer seccomposer"
-           onDragOver={(e) => e.preventDefault()}
-           onDrop={(e) => {
-             e.preventDefault();
-             setFiles([...files, ...Array.from(e.dataTransfer.files)]);
-           }}>
-        <textarea className="composer-ta" rows={1}
-               placeholder={"跟秘书说点什么…（Enter 发送，Shift+Enter 换行）"} value={input}
-               onChange={(e) => {
-                 setInput(e.target.value);
-                 const el = e.currentTarget;
-                 el.style.height = "auto";
-                 el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-               }}
-               onKeyDown={(e) => {
-                 // 官方键位：Enter 发送、Shift+Enter 换行；输入法组字中不拦截
-                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                   e.preventDefault(); send();
-                 }
-               }} />
-        {streaming ? (
-          <button className="btn stopbtn" onClick={stop} title="停止当前回合">■ 停止</button>
-        ) : (
-          <button className="btn primary" disabled={sending || !input.trim()} onClick={send}>
-            {sending ? "发送中…" : "发送"}
-          </button>
-        )}
-      </div>
+      <ChatComposer
+        value={input} onChange={setInput}
+        onSend={send} onStop={stop}
+        streaming={streaming} sending={sending}
+        placeholder="跟秘书说点什么…（Enter 发送，Shift+Enter 换行）"
+        files={files} onFiles={setFiles} />
     </div>
   );
 }

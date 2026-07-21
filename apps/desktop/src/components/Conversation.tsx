@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowUp, Paperclip, RotateCcw, Square } from "lucide-react";
 import type { MiloEvent } from "../lib/api";
 import {
   Conversation as DFConversation, ConversationContent, ConversationScrollButton,
@@ -235,5 +236,111 @@ export function OfficialConversation({ children }: { children: React.ReactNode }
       </ConversationContent>
       <ConversationScrollButton />
     </DFConversation>
+  );
+}
+
+/** 头像文字：中文取末字（辨识名），其余取首字母大写。 */
+function avatarText(name: string): string {
+  const t = (name || "").trim();
+  if (!t) return "?";
+  return /[一-鿿]/.test(t) ? t.slice(-1) : t.slice(0, 1).toUpperCase();
+}
+/** 头像色相：名字决定，让每个成员有稳定的视觉身份。 */
+function avatarHue(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
+}
+
+/** 会话头部：头像 + 标题/副标题 + 重置。私聊与秘书共用。 */
+export function ChatHeader({ name, title, subtitle, accent, onReset }: {
+  name: string; title: string; subtitle: string;
+  accent?: boolean;  // 秘书用主色实心头像，成员用名字色相
+  onReset: () => void;
+}) {
+  const style = accent
+    ? undefined
+    : { background: `hsl(${avatarHue(name)} 42% 46%)`, color: "#fff" };
+  return (
+    <div className="chat-head" data-tauri-drag-region>
+      <div className={`chat-ava ${accent ? "accent" : ""}`} style={style}>
+        {avatarText(name)}
+      </div>
+      <div className="chat-id">
+        <div className="chat-title">{title}</div>
+        <div className="chat-sub">{subtitle}</div>
+      </div>
+      <button className="chat-reset" title="重置对话（清空历史，人设不变）" onClick={onReset}>
+        <RotateCcw size={14} /> 重置
+      </button>
+    </div>
+  );
+}
+
+/** 会话输入：输入框与操作同处一张圆角卡面（focus 高亮环）；附件、Enter 发送、拖拽。 */
+export function ChatComposer({
+  value, onChange, onSend, onStop, streaming, sending, placeholder,
+  files, onFiles, allowFiles = true,
+}: {
+  value: string; onChange: (v: string) => void;
+  onSend: () => void; onStop: () => void;
+  streaming: boolean; sending: boolean; placeholder: string;
+  files: File[]; onFiles: (f: File[]) => void; allowFiles?: boolean;
+}) {
+  const canSend = !sending && !!value.trim();
+  return (
+    <div className="chat-input"
+         onDragOver={allowFiles ? (e) => e.preventDefault() : undefined}
+         onDrop={allowFiles ? (e) => {
+           e.preventDefault();
+           onFiles([...files, ...Array.from(e.dataTransfer.files)]);
+         } : undefined}>
+      {files.length > 0 && (
+        <div className="chat-attach">
+          {files.map((f, i) => (
+            <span key={i} className="chip">
+              <Paperclip size={11} /> {f.name}
+              <button className="capx" title="移除"
+                      onClick={() => onFiles(files.filter((_, j) => j !== i))}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="chat-input-row">
+        <textarea className="chat-ta" rows={1} placeholder={placeholder} value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            const el = e.currentTarget;
+            el.style.height = "auto";
+            el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault(); if (canSend) onSend();
+            }
+          }} />
+        <div className="chat-actions">
+          {allowFiles && (
+            <label className="chat-attach-btn" title="添加附件">
+              <Paperclip size={16} />
+              <input type="file" multiple hidden
+                     onChange={(e) => {
+                       onFiles([...files, ...Array.from(e.target.files ?? [])]);
+                       e.currentTarget.value = "";
+                     }} />
+            </label>
+          )}
+          {streaming ? (
+            <button className="chat-send stop" onClick={onStop} title="停止当前回合">
+              <Square size={15} fill="currentColor" />
+            </button>
+          ) : (
+            <button className="chat-send" disabled={!canSend} onClick={onSend} title="发送（Enter）">
+              <ArrowUp size={17} />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

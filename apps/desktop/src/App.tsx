@@ -10,8 +10,7 @@ import { SecretaryView } from "./components/SecretaryView";
 import { SettingsModal } from "./components/SettingsView";
 import {
   api, subscribe,
-  type GroupSummary, type Member, type MiloEvent,
-  type PlanStep, type TaskRow, type Todo,
+  type MiloEvent, type PlanStep, type TaskRow,
 } from "./lib/api";
 import { initNotifications, notifyForEvent, onNotificationOpen } from "./lib/notify";
 import {
