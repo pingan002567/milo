@@ -24,6 +24,20 @@ def _is_task(task_id: str) -> bool:
     return task_id not in ("chat", "dm")
 
 
+#: 私聊模式准则——每轮注入，压住 ask_clarification 循环。
+#  成员的 persona 升级契约是为「任务经秘书长转达老板」写的；私聊里没有转达环节，
+#  成员却照样 ask_clarification 并反复追问（实测：老板答"自己创造出来文件"仍原样重问）。
+#  这里明确告知它这是即时对话：直接说话、给了授权就用默认值动手、别重复问同一件事。
+_DM_GUIDANCE = (
+    "【私聊模式】以下是你和老板的即时私聊，不是任务派发，没有秘书长转达环节。请遵守：\n"
+    "1. 不要调用 ask_clarification 工具；需要澄清就在回复里直接问，且同一件事绝不重复问。\n"
+    "2. 老板给出「你自己定 / 随便 / 自己创造」这类授权时，立刻用合理默认值动手，"
+    "在回复里说明你采用的默认即可，不要再追问。\n"
+    "3. 简洁、口语化，像同事对话。\n\n"
+    "老板对你说：\n"
+)
+
+
 def _emit(obj) -> None:
     sys.stdout.write(encode(obj) + "\n")
     sys.stdout.flush()
@@ -178,7 +192,10 @@ class Worker:
         所以任务通道开、对话通道关。
         """
         self._cancelled.discard(task_id)
-        gen = self._client.stream(message, thread_id=thread_id, plan_mode=plan_mode)
+        # 私聊：每轮注入对话准则，抑制 ask_clarification 循环（见 _DM_GUIDANCE）。
+        # 只作用于成员私聊（task_id=="dm"），不碰秘书 chat（同 worker 但语义不同）。
+        msg = _DM_GUIDANCE + message if task_id == "dm" else message
+        gen = self._client.stream(msg, thread_id=thread_id, plan_mode=plan_mode)
         aborted = False
         try:
             for frame in iter_normalized(gen, task_id=task_id):
