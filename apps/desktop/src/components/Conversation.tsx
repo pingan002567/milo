@@ -189,9 +189,11 @@ export function TurnList({ turns, onRate }: {
       {turns.map((t) => {
         if (t.kind === "user") {
           return (
-            <Message key={t.key} from="user" className="group/msg">
+            <Message key={t.key} from="user" className="group/msg relative">
               <MessageContent>{t.text}</MessageContent>
-              <MessageToolbar className="opacity-0 group-hover/msg:opacity-100 transition-opacity">
+              {/* 工具条绝对定位、不占流内高度：否则每条消息后都留一段空带，
+                  非悬停时看着像空隙、悬停时又冒出一个孤零零的「复制」。 */}
+              <MessageToolbar className="!mt-0 absolute top-full right-0 opacity-0 group-hover/msg:opacity-100 transition-opacity z-10">
                 <CopyBtn text={t.text} />
               </MessageToolbar>
             </Message>
@@ -217,7 +219,7 @@ export function TurnList({ turns, onRate }: {
         const cites = extractCitations(t.text);
         return (
           <Message key={t.key} from="assistant" className="group/msg">
-            <MessageContent>
+            <MessageContent className="relative">
               {t.reasoning && (
                 <ReasoningBlock reasoning={t.reasoning} seconds={t.seconds} streaming={false} />
               )}
@@ -238,7 +240,8 @@ export function TurnList({ turns, onRate }: {
                   </SourcesContent>
                 </Sources>
               )}
-              <MessageToolbar className="opacity-0 group-hover/msg:opacity-100 transition-opacity">
+              {/* 工具条绝对定位、不占流内高度（见上「用户消息」注释）。 */}
+              <MessageToolbar className="!mt-0 absolute top-full left-0 opacity-0 group-hover/msg:opacity-100 transition-opacity z-10">
                 <div className="flex gap-1 items-center">
                   <CopyBtn text={t.text} />
                   {onRate && <FeedbackBtns onRate={(r) => onRate(t.key, r)} />}
