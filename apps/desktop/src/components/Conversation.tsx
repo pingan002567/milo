@@ -138,22 +138,38 @@ export function buildTurns(events: MiloEvent[]): Turn[] {
   return turns;
 }
 
-/** 🧠 思考条：官方 Reasoning 形态（trigger + 可折叠 muted 正文）。 */
+/**
+ * 🧠 思考条——照搬官方 ai-elements/reasoning：
+ * 流式时默认展开（跟随思考），完成后 1 秒自动收起（AUTO_CLOSE_DELAY）；
+ * 用户手动展开/收起后不再自动。触发条：🧠 + "思考中…(Ns)" shimmer / "思考了 N 秒"。
+ */
+const AUTO_CLOSE_DELAY = 1000;
 export function ReasoningBlock({ reasoning, seconds, streaming }: {
   reasoning: string; seconds: number | null; streaming: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(streaming);
+  const [manual, setManual] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+
   useEffect(() => {
     if (!streaming) return;
+    setOpen(true);
     const t0 = Date.now();
     const iv = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
     return () => clearInterval(iv);
   }, [streaming]);
 
+  // 完成后自动收起一次（除非用户手动干预过）
+  useEffect(() => {
+    if (streaming || manual) return;
+    const to = setTimeout(() => setOpen(false), AUTO_CLOSE_DELAY);
+    return () => clearTimeout(to);
+  }, [streaming, manual]);
+
   return (
     <div className="reason">
-      <button className="reason-trigger" onClick={() => reasoning && setOpen(!open)}>
+      <button className="reason-trigger"
+              onClick={() => { if (reasoning) { setManual(true); setOpen(!open); } }}>
         <span className="reason-brain">🧠</span>
         {streaming ? (
           <span className="shimmer">思考中…（{elapsed}s）</span>
@@ -162,7 +178,7 @@ export function ReasoningBlock({ reasoning, seconds, streaming }: {
         )}
         {reasoning && <span className={`reason-chevron ${open ? "open" : ""}`}>⌄</span>}
       </button>
-      {(open || streaming) && reasoning && (
+      {open && reasoning && (
         <div className="reason-content">{reasoning.slice(-2000)}</div>
       )}
     </div>
