@@ -10,22 +10,27 @@ import { SecretaryView } from "./components/SecretaryView";
 import { SettingsModal } from "./components/SettingsView";
 import {
   api, subscribe,
-  type GroupSummary, type Member, type MiloEvent, type OrgSummary,
+  type GroupSummary, type Member, type MiloEvent,
   type PlanStep, type TaskRow, type Todo,
 } from "./lib/api";
 import { initNotifications, notifyForEvent, onNotificationOpen } from "./lib/notify";
+import {
+  useOrgs, useGroups, useTodos, useMembers, useDms,
+  invalidateTeamLists, queryClient, qk,
+} from "./lib/queries";
 
 type Screen = "chat" | "todo" | "org" | "market" | "roster" | "group" | "dm";
 const LAST_ORG = "milo.lastOrg";
 
 export default function App() {
-  const [orgs, setOrgs] = useState<OrgSummary[]>([]);
+  const { data: orgs = [] } = useOrgs();  // react-query：30s 轮询（跨团队待办角标）
+  const refreshOrgs = () => queryClient.invalidateQueries({ queryKey: qk.orgs });
   const [ORG, setOrg] = useState<string>(() => localStorage.getItem(LAST_ORG) || "demo");
   const [screen, setScreen] = useState<Screen>("chat");
   const [conn, setConn] = useState<"connecting" | "open" | "closed">("connecting");
-  const [groups, setGroups] = useState<GroupSummary[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [todos, setTodos] = useState<Todo[]>([]);
+  const { data: groups = [] } = useGroups(ORG);   // react-query：WS 事件触发 invalidate 刷新
+  const { data: members = [] } = useMembers(ORG);
+  const { data: todos = [] } = useTodos(ORG);
   const [gid, setGid] = useState<string | null>(null);
   const [events, setEvents] = useState<MiloEvent[]>([]);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
@@ -38,32 +43,19 @@ export default function App() {
   const [focusTask, setFocusTask] = useState<string | null>(null);
   const [secEvents, setSecEvents] = useState<MiloEvent[]>([]);  // 秘书对话实时流
   const [dmTarget, setDmTarget] = useState<string | null>(null);   // 私聊对象
-  const [dms, setDms] = useState<{ group_id: string; member: string }[]>([]);  // 私聊会话列表
+  const { data: dms = [] } = useDms(ORG);  // 私聊会话列表（react-query）
   const [inspOpen, setInspOpen] = useState(() => localStorage.getItem("milo.insp") !== "0");
   const [arcOpen, setArcOpen] = useState(() => localStorage.getItem("milo.arc") === "1");
   const [dmEvents, setDmEvents] = useState<MiloEvent[]>([]);       // 私聊实时流
   const seen = useRef(new Set<string>());
 
-  const refreshLists = useCallback(async () => {
-    const [g, t, m, d] = await Promise.all([
-      api.groups(ORG).catch(() => ({ groups: [] })),
-      api.todos(ORG).catch(() => ({ todos: [] })),
-      api.members(ORG).catch(() => ({ members: [] })),
-      api.dms(ORG).catch(() => ({ dms: [] })),
-    ]);
-    setGroups(g.groups); setTodos(t.todos); setMembers(m.members); setDms(d.dms);
-  }, [ORG]);
+  // 失效四张列表 → react-query 增量重拉（并发去重：一串事件只触发一次实际请求）。
+  const refreshLists = useCallback(() => invalidateTeamLists(ORG), [ORG]);
 
-  // 团队列表（切换器用）；定时刷新以获得跨团队待办角标
+  // 当前团队已不在列表中（被删除等）→ 落到第一个团队。列表本身由 useOrgs 轮询。
   useEffect(() => {
-    const load = () => api.orgs().then((r) => {
-      setOrgs(r.orgs);
-      if (r.orgs.length && !r.orgs.some((o) => o.org === ORG)) switchOrg(r.orgs[0].org);
-    }).catch(() => setOrgs([]));
-    load();
-    const iv = setInterval(load, 30_000);
-    return () => clearInterval(iv);
-  }, []);
+    if (orgs.length && !orgs.some((o) => o.org === ORG)) switchOrg(orgs[0].org);
+  }, [orgs, ORG]);
 
   const switchOrg = (next: string) => {
     localStorage.setItem(LAST_ORG, next);
@@ -89,9 +81,9 @@ export default function App() {
     await loadPlan(id, d.status);
   }, [loadPlan, ORG]);
 
-  // WS：实时事件入流 + 列表刷新（断线自动按 seq 水位重连补发）
+  // WS：实时事件入流 + 列表刷新（断线自动按 seq 水位重连补发）。
+  // 列表由 react-query 在挂载时自动首拉，这里不再手动 refreshLists()。
   useEffect(() => {
-    refreshLists();
     initNotifications();
     return subscribe(ORG, (e) => {
       if (seen.current.has(e.event_id)) return; // 补发与实时可能重叠
@@ -101,7 +93,9 @@ export default function App() {
       setEvents((prev) => (e.group_id === gidRef.current ? [...prev, e] : prev));
       if (e.group_id === "secretary") setSecEvents((prev) => [...prev, e]);
       if (e.group_id.startsWith("dm-")) setDmEvents((prev) => [...prev, e]);
-      refreshLists();
+      // status 是 token 级高频流——不刷列表（左栏不随每个 token 变）。
+      // 状态推进类事件（chat/system）才让四张列表失效重拉，并发去重成一次请求。
+      if (e.type !== "status") refreshLists();
       // 汇报（status）是 token 级高频流，只 append 不重拉详情——
       // 否则长会话是 O(n²) 请求；状态推进类事件才需要同步任务/群状态
       if (e.group_id === gidRef.current && e.type !== "status") {
@@ -208,7 +202,7 @@ export default function App() {
         <div className="brand" data-tauri-drag-region>Milo</div>
         <OrgSwitcher org={ORG} orgs={orgs} onSwitch={switchOrg}
                      onCreated={(slug) => {
-                       api.orgs().then((r) => setOrgs(r.orgs)).catch(() => {});
+                       refreshOrgs();
                        switchOrg(slug);
                      }} />
         <button className={`nv ${screen === "chat" ? "on" : ""}`} onClick={() => setScreen("chat")}>
@@ -354,7 +348,7 @@ export default function App() {
       <SettingsModal org={ORG} open={settingsScope !== null} connected={conn === "open"}
                      scope={settingsScope ?? "system"}
                      onClose={() => setSettingsScope(null)}
-                     onOrgChanged={() => api.orgs().then((r) => setOrgs(r.orgs)).catch(() => {})} />
+                     onOrgChanged={() => refreshOrgs()} />
 
       <div className="statusbar">
         <span className={`dot ${conn}`} />

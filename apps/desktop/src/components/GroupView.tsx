@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type EscalationPayload, type MiloEvent, type PlanStep, type TaskRow } from "../lib/api";
+import { Plan, PlanHeader, PlanTitle, PlanContent, PlanFooter, PlanTrigger } from "./ai-elements/plan";
 import { Md } from "./Md";
 
 const AVATAR: Record<string, string> = { owner: "你", secretariat: "秘", system: "系" };
@@ -201,27 +202,34 @@ function DecisionCard({
   );
 }
 
-/** 计划卡：批准即授权执行到里程碑（可拒绝）。 */
+/** 计划卡：批准即授权执行到里程碑（可拒绝）。
+    用官方 Plan 复合组件（Collapsible+Card，MIT，见 /NOTICE）承载——可折叠，
+    Milo 的批准/拒绝按钮挂在 PlanFooter 上。 */
 function PlanCard({
   steps, onApprove, onReject,
 }: { steps: PlanStep[]; onApprove: () => void; onReject: () => void }) {
   return (
-    <div className="plan">
-      <div className="ph">执行计划 · 待你批准</div>
-      <ol>
-        {steps.map((s) => (
-          <li key={s.task_id}>
-            <b>[{s.capability}]</b> {s.objective}
-            {s.artifacts.length > 0 && <small>产物：{s.artifacts.join("、")}</small>}
-          </li>
-        ))}
-      </ol>
-      <div className="pf">
+    <Plan defaultOpen className="plan mb-3">
+      <PlanHeader>
+        <PlanTitle>执行计划 · 待你批准</PlanTitle>
+        <PlanTrigger />
+      </PlanHeader>
+      <PlanContent>
+        <ol>
+          {steps.map((s) => (
+            <li key={s.task_id}>
+              <b>[{s.capability}]</b> {s.objective}
+              {s.artifacts.length > 0 && <small>产物：{s.artifacts.join("、")}</small>}
+            </li>
+          ))}
+        </ol>
+      </PlanContent>
+      <PlanFooter>
         <button className="btn primary sm" onClick={onApprove}>批准执行</button>
         <button className="btn sm" onClick={onReject}>不批准</button>
         <span className="muted" style={{ marginLeft: "auto" }}>批准即授权到里程碑，偏离会重新上报</span>
-      </div>
-    </div>
+      </PlanFooter>
+    </Plan>
   );
 }
 

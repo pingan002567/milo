@@ -1,4 +1,5 @@
 import React from "react";
+import { preprocessMemberMarkdown } from "./mdPreprocess";
 
 /**
  * 轻量 Markdown 渲染——只做排版增强，不做能力放行。
@@ -60,7 +61,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
 }
 
 export function Md({ text }: { text: string }) {
-  const lines = String(text ?? "").split("\n");
+  const lines = preprocessMemberMarkdown(String(text ?? "")).split("\n");
   const blocks: React.ReactNode[] = [];
   let i = 0;
   let key = 0;

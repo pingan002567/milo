@@ -13,6 +13,8 @@ export default {
         "muted-foreground": "var(--ink-3)", border: "var(--line)",
         primary: "var(--pine)", "primary-foreground": "#fff",
         accent: "var(--panel-2)", ring: "var(--pine)",
+        card: "var(--panel)", "card-foreground": "var(--ink)",
+        popover: "var(--panel)", "popover-foreground": "var(--ink)",
       },
       borderColor: { DEFAULT: "var(--line)" },
     },

@@ -8,6 +8,8 @@ import {
 } from "./ai-elements/chain-of-thought";
 import { Message, MessageContent, MessageToolbar } from "./ai-elements/message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "./ai-elements/reasoning";
+import { Sources, SourcesContent, SourcesTrigger, Source } from "./ai-elements/sources";
+import { ChevronDownIcon } from "lucide-react";
 import { Md } from "./Md";
 
 /**
@@ -192,12 +194,17 @@ export function TurnList({ turns, onRate }: {
                 <Md text={t.text} />
               </div>
               {cites.length > 0 && (
-                <div className="cites">
-                  {cites.map((c, i) => (
-                    <a key={i} className="cite" href={c.url} target="_blank" rel="noreferrer"
-                       title={c.url}>🔗 {c.label.slice(0, 28)}</a>
-                  ))}
-                </div>
+                <Sources>
+                  <SourcesTrigger count={cites.length}>
+                    <p className="font-medium">引用来源 {cites.length}</p>
+                    <ChevronDownIcon className="h-4 w-4" />
+                  </SourcesTrigger>
+                  <SourcesContent>
+                    {cites.map((c, i) => (
+                      <Source key={i} href={c.url} title={c.label.slice(0, 40)} />
+                    ))}
+                  </SourcesContent>
+                </Sources>
               )}
               <MessageToolbar className="opacity-0 group-hover/msg:opacity-100 transition-opacity">
                 <div className="flex gap-1 items-center">
