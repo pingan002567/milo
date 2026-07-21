@@ -74,6 +74,14 @@ class SecretaryDesk:
         if self._adapter is not None:
             await self._adapter.cancel("chat")
 
+    async def reset(self) -> None:
+        """重置秘书对话（清空历史；工具与人设不变）。"""
+        if self._adapter is not None:
+            await self._adapter.reset("chat")
+        self._emit(MiloEvent(
+            group_id=SECRETARY_GROUP, type=EventType.SYSTEM, actor="system",
+            payload={"msg": "对话已重置", "reset": True}))
+
     async def close(self) -> None:
         if self._pump_task:
             self._pump_task.cancel()

@@ -14,7 +14,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-Method = Literal["enroll", "assign", "deliver", "resume", "cancel", "shutdown", "ping"]
+Method = Literal["enroll", "assign", "deliver", "resume", "cancel", "reset", "shutdown", "ping"]
 
 
 class Request(BaseModel):

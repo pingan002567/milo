@@ -68,6 +68,12 @@ export function MemberChatView({ org, member, liveEvents }: {
   return (
     <div className="secpage">
       <div className="gchead" data-tauri-drag-region>
+        <button className="resetbtn" title="重置对话（清空历史，人设不变）"
+                onClick={async () => {
+                  if (!window.confirm("清空这个对话的历史？成员的人设与档案不受影响。")) return;
+                  await api.resetConversation(org, member).catch(() => {});
+                  setHistory([]);
+                }}>↺ 重置</button>
         <div>
           <b>私聊 · {member}</b>
           <div className="gcsub">调教通道：考察、立规矩、让它自改人设与档案——不设限制</div>

@@ -388,6 +388,15 @@ async def stop_turn(org: str, body: StopRequest) -> dict[str, Any]:
     return {"status": "stopped"}
 
 
+@app.post("/api/orgs/{org}/reset")
+async def reset_conversation(org: str, body: StopRequest) -> dict[str, Any]:
+    """重置对话（秘书 / 成员私聊）：清空对话历史，人设与工具不变。"""
+    ok = await hub.reset_conversation(org, member=body.member)
+    if not ok:
+        raise HTTPException(409, "没有可重置的对话")
+    return {"status": "reset"}
+
+
 @app.post("/api/orgs/{org}/uploads")
 async def upload_file(org: str, file: UploadFile = File(...)) -> dict[str, Any]:
     """上传资料（私聊附件 / 返工资料）：存组织级 uploads，供注入成员输入目录。"""

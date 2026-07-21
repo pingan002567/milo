@@ -285,6 +285,15 @@ class Office:
         await self._adapters[name].chat(text, group_id=gid, channel="dm",
                                         attachments=attachments)
 
+    async def reset_dm(self, member: str) -> None:
+        """重置某成员私聊：清空对话历史（记忆型人设不变，只清对话线程）。"""
+        if member in self._adapters:
+            await self._adapters[member].reset("dm")
+            gid = f"dm-{member}"
+            self._emit(MiloEvent(
+                group_id=gid, type=EventType.SYSTEM, actor="system",
+                payload={"msg": "对话已重置", "reset": True}))
+
     async def cancel(self, member: str, task_id: str) -> None:
         """停止某成员当前回合（私聊或任务）。"""
         if member in self._adapters:

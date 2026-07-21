@@ -61,6 +61,12 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
   return (
     <div className="secpage">
       <div className="gchead" data-tauri-drag-region>
+        <button className="resetbtn" title="重置对话（清空历史，人设不变）"
+                onClick={async () => {
+                  if (!window.confirm("清空这个对话的历史？成员的人设与档案不受影响。")) return;
+                  await api.resetConversation(org).catch(() => {});
+                  setHistory([]);
+                }}>↺ 重置</button>
         <div>
           <b>秘书</b>
           <div className="gcsub">你的系统操作面：问团队、看进展、派活，都在这里说</div>

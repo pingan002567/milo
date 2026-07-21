@@ -115,6 +115,14 @@ class SubprocessAdapter(MemberAdapter):
             await self._call("assign", {"task_id": channel, "prompt": text,
                                         "inputs": attachments or []})
 
+    async def reset(self, channel: str) -> None:
+        """清空该通道对话：删 worker 侧 checkpoint + 本地重置通道标记。"""
+        self._stopped.discard(channel)
+        started: set[str] = getattr(self, "_chat_channels", None) or set()
+        started.discard(channel)
+        self._chat_channels = started
+        await self._call("reset", {"task_id": channel})
+
     async def cancel(self, task_id: str) -> None:
         """停止该通道当前回合。
 

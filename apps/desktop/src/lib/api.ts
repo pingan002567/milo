@@ -154,6 +154,12 @@ export const api = {
       body: JSON.stringify({ group_id: groupId, event_id: eventId, rating }),
     }).then(j) as Promise<{ status: string }>,
 
+  resetConversation: (org: string, member?: string) =>
+    fetch(`/api/orgs/${org}/reset`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ member: member ?? null }),
+    }).then(j) as Promise<{ status: string }>,
+
   stopTurn: (org: string, member?: string, taskId?: string) =>
     fetch(`/api/orgs/${org}/stop`, {
       method: "POST", headers: { "Content-Type": "application/json" },

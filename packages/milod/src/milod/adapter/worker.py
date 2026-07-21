@@ -132,6 +132,29 @@ class Worker:
         except Exception:  # noqa: BLE001 —— 无 checkpointer 也能跑单轮，降级不阻断
             return None
 
+    def reset_thread(self, params: dict) -> dict:
+        """清空某通道的对话历史：删该 thread 的全部 checkpoint，下一轮从头开始。
+
+        对话 checkpoint 会无限膨胀（每轮累积），且"停止"可能在流式中途留下
+        半截的不一致 checkpoint——重置是干净的兜底，也是 llm-space clear 的对等能力。
+        """
+        channel = params.get("task_id") or "chat"
+        thread_id = self._threads.get(channel, f"{self._agent}-{channel}")
+        conn = getattr(self, "_conn", None)
+        removed = 0
+        if conn is not None:
+            for tbl in ("checkpoints", "writes", "checkpoint_blobs", "checkpoint_writes"):
+                try:
+                    cur = conn.execute(f"DELETE FROM {tbl} WHERE thread_id=?", (thread_id,))
+                    removed += cur.rowcount
+                except Exception:  # noqa: BLE001 —— 表结构差异容忍
+                    pass
+            conn.commit()
+        # 让下一条消息重新 assign（建全新线程状态）
+        self._chat_channels = getattr(self, "_chat_channels", set())
+        self._chat_channels.discard(channel)
+        return {"channel": channel, "removed": removed}
+
     def cancel(self, params: dict) -> dict:
         """停止当前回合。**只置标志、不跨线程 close 生成器**——
 
@@ -198,9 +221,13 @@ class Worker:
                 msg = decode_line(line)
                 if not isinstance(msg, Request):
                     continue
-                if msg.method == "cancel":
-                    # 就地处理：主线程可能正卡在流式循环中
-                    _emit(Response(id=msg.id, result=self.cancel(msg.params)))
+                if msg.method in ("cancel", "reset"):
+                    # 就地处理：主线程可能正阻塞在流式循环里读不到
+                    fn = self.cancel if msg.method == "cancel" else self.reset_thread
+                    try:
+                        _emit(Response(id=msg.id, result=fn(msg.params)))
+                    except Exception as e:  # noqa: BLE001
+                        _emit(Response(id=msg.id, error=f"{type(e).__name__}: {e}"))
                     continue
                 q.put(msg)
             q.put(None)

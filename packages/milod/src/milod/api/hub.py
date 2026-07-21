@@ -189,6 +189,18 @@ class Hub:
             return True
         return False
 
+    async def reset_conversation(self, org: str, member: str | None = None) -> bool:
+        """重置对话：秘书 / 成员私聊。清对话历史，不动人设与工具。"""
+        office = await self.office(org)
+        if member:
+            await office.reset_dm(member)
+            return True
+        desk = self._desks.get(org)
+        if desk is not None:
+            await desk.reset()
+            return True
+        return False
+
     # ---- 验收确认与返工（验收与返工设计 §一）----------------------------
     async def accept_group(self, org: str, group_id: str, note: str = "") -> bool:
         """验收通过（**不归档**）：任务留在视野里可继续用、继续提要求；
