@@ -3,6 +3,9 @@ import type { MiloEvent } from "../lib/api";
 import {
   Conversation as DFConversation, ConversationContent, ConversationScrollButton,
 } from "./ai-elements/conversation";
+import {
+  ChainOfThought, ChainOfThoughtContent, ChainOfThoughtHeader, ChainOfThoughtStep,
+} from "./ai-elements/chain-of-thought";
 import { Message, MessageContent, MessageToolbar } from "./ai-elements/message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "./ai-elements/reasoning";
 import { Md } from "./Md";
@@ -32,31 +35,25 @@ export function Suggestions({ items, onPick }: {
   );
 }
 
-/** TODO 清单（harness TodoMiddleware 的 write_todos 产物）：把一团思考变成可勾选计划。 */
+/**
+ * TODO 计划（harness write_todos 产物）——用官方 ChainOfThought 思维链组件渲染：
+ * 每个 TODO 项 = 一个 Step，状态映射 completed→complete / in_progress→active /
+ * pending→pending（与官方 Step 的三态语义一致）。
+ */
 export function TodoPanel({ todos }: { todos: Array<{ content: string; status: string }> }) {
-  const [open, setOpen] = useState(true);
   const done = todos.filter((t) => ["completed", "done"].includes(t.status)).length;
+  const stepStatus = (s: string): "complete" | "active" | "pending" =>
+    ["completed", "done"].includes(s) ? "complete"
+      : ["in_progress", "running"].includes(s) ? "active" : "pending";
   return (
-    <div className="todopanel">
-      <button className="todohead" onClick={() => setOpen(!open)}>
-        <span>📋 计划 {done}/{todos.length}</span>
-        <span className={`reason-chevron ${open ? "open" : ""}`}>⌄</span>
-      </button>
-      {open && (
-        <ul className="todolist">
-          {todos.map((t, i) => {
-            const st = ["completed", "done"].includes(t.status) ? "done"
-              : ["in_progress", "running"].includes(t.status) ? "doing" : "todo";
-            return (
-              <li key={i} className={st}>
-                <span className="tdmark">{st === "done" ? "✓" : st === "doing" ? "▸" : "○"}</span>
-                {t.content}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+    <ChainOfThought defaultOpen className="mb-2">
+      <ChainOfThoughtHeader>计划 {done}/{todos.length}</ChainOfThoughtHeader>
+      <ChainOfThoughtContent>
+        {todos.map((t, i) => (
+          <ChainOfThoughtStep key={i} label={t.content} status={stepStatus(t.status)} />
+        ))}
+      </ChainOfThoughtContent>
+    </ChainOfThought>
   );
 }
 
