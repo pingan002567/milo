@@ -1,11 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { MiloEvent } from "../lib/api";
+import {
+  Conversation as DFConversation, ConversationContent, ConversationScrollButton,
+} from "./ai-elements/conversation";
+import { Message, MessageContent, MessageToolbar } from "./ai-elements/message";
+import { Reasoning, ReasoningContent, ReasoningTrigger } from "./ai-elements/reasoning";
 import { Md } from "./Md";
 
 /**
- * 会话渲染共享件——对齐 DeerFlow 官方前端（ai-elements/message + reasoning）。
- * 秘书页与成员私聊共用：无头像；用户右对齐灰气泡纯文本；助手全宽 Markdown；
- * 🧠 思考条（流式 shimmer 计时 → "思考了 N 秒"可展开）；悬停复制。
+ * 会话渲染共享件——**代码级复用 DeerFlow 官方 ai-elements 组件**
+ * （Message / Reasoning / Conversation，MIT License，见 /NOTICE）。
+ * 秘书页与成员私聊共用；Milo 扩展（TODO/引用/用量/反馈）挂在官方组件上。
  */
 
 export type Turn =
@@ -13,36 +18,6 @@ export type Turn =
   | { kind: "assistant"; key: string; text: string; reasoning: string; seconds: number | null;
       tokens?: number | null; todos?: Array<{ content: string; status: string }> }
   | { kind: "thinking"; key: string; reasoning: string; startTs: string };
-
-/**
- * 贴底滚动（借鉴官方 ai-elements/conversation 的 StickToBottom 语义）：
- * 只在用户本来就在底部时才跟随新内容；用户向上翻看历史时**不再强行拉回**，
- * 改为浮出「回到底部」。此前是无条件 scrollIntoView——流式输出时想往上看
- * 历史会被不停拽回来。
- */
-export function useStickToBottom(dep: unknown) {
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [atBottom, setAtBottom] = useState(true);
-
-  const onScroll = useCallback(() => {
-    const el = boxRef.current;
-    if (!el) return;
-    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
-  }, []);
-
-  useEffect(() => {
-    const el = boxRef.current;
-    if (el && atBottom) el.scrollTop = el.scrollHeight;
-  }, [dep, atBottom]);
-
-  const scrollToBottom = useCallback(() => {
-    const el = boxRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    setAtBottom(true);
-  }, []);
-
-  return { boxRef, atBottom, onScroll, scrollToBottom };
-}
 
 /** 空态建议（官方 suggestion 形态）：点一下即发，不用手打。 */
 export function Suggestions({ items, onPick }: {
@@ -139,49 +114,18 @@ export function buildTurns(events: MiloEvent[]): Turn[] {
 }
 
 /**
- * 🧠 思考条——照搬官方 ai-elements/reasoning：
- * 流式时默认展开（跟随思考），完成后 1 秒自动收起（AUTO_CLOSE_DELAY）；
- * 用户手动展开/收起后不再自动。触发条：🧠 + "思考中…(Ns)" shimmer / "思考了 N 秒"。
+ * 思考块——直接用官方 Reasoning/ReasoningTrigger/ReasoningContent 组件
+ * （流式默认展开、完成后 1s 自动收起、LiveTimer 计时全由官方组件实现）。
  */
-const AUTO_CLOSE_DELAY = 1000;
 export function ReasoningBlock({ reasoning, seconds, streaming }: {
   reasoning: string; seconds: number | null; streaming: boolean;
 }) {
-  const [open, setOpen] = useState(streaming);
-  const [manual, setManual] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    if (!streaming) return;
-    setOpen(true);
-    const t0 = Date.now();
-    const iv = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
-    return () => clearInterval(iv);
-  }, [streaming]);
-
-  // 完成后自动收起一次（除非用户手动干预过）
-  useEffect(() => {
-    if (streaming || manual) return;
-    const to = setTimeout(() => setOpen(false), AUTO_CLOSE_DELAY);
-    return () => clearTimeout(to);
-  }, [streaming, manual]);
-
   return (
-    <div className="reason">
-      <button className="reason-trigger"
-              onClick={() => { if (reasoning) { setManual(true); setOpen(!open); } }}>
-        <span className="reason-brain">🧠</span>
-        {streaming ? (
-          <span className="shimmer">思考中…（{elapsed}s）</span>
-        ) : (
-          <span>思考了 {seconds ?? "几"} 秒</span>
-        )}
-        {reasoning && <span className={`reason-chevron ${open ? "open" : ""}`}>⌄</span>}
-      </button>
-      {open && reasoning && (
-        <div className="reason-content">{reasoning.slice(-2000)}</div>
-      )}
-    </div>
+    <Reasoning isStreaming={streaming} duration={seconds ?? undefined}
+               className="text-sm">
+      <ReasoningTrigger hasContent={!!reasoning} />
+      {reasoning && <ReasoningContent>{reasoning.slice(-2000)}</ReasoningContent>}
+    </Reasoning>
   );
 }
 
@@ -213,7 +157,7 @@ export function CopyBtn({ text }: { text: string }) {
   );
 }
 
-/** 回合列表（官方 message 布局）。 */
+/** 回合列表——用官方 Message/MessageContent 原语，Milo 扩展挂在其上。 */
 export function TurnList({ turns, onRate }: {
   turns: Turn[]; onRate?: (eventId: string, rating: number) => void;
 }) {
@@ -222,47 +166,70 @@ export function TurnList({ turns, onRate }: {
       {turns.map((t) => {
         if (t.kind === "user") {
           return (
-            <div key={t.key} className="dfmsg user">
-              <div className="dfbubble">{t.text}</div>
-              <div className="dftoolbar"><CopyBtn text={t.text} /></div>
-            </div>
+            <Message key={t.key} from="user" className="group/msg">
+              <MessageContent>{t.text}</MessageContent>
+              <MessageToolbar className="opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                <CopyBtn text={t.text} />
+              </MessageToolbar>
+            </Message>
           );
         }
         if (t.kind === "thinking") {
           return (
-            <div key={t.key} className="dfmsg assistant">
-              <ReasoningBlock reasoning={t.reasoning} seconds={null} streaming />
-            </div>
+            <Message key={t.key} from="assistant">
+              <MessageContent>
+                <ReasoningBlock reasoning={t.reasoning} seconds={null} streaming />
+              </MessageContent>
+            </Message>
           );
         }
         const cites = extractCitations(t.text);
         return (
-          <div key={t.key} className="dfmsg assistant">
-            {t.reasoning && (
-              <ReasoningBlock reasoning={t.reasoning} seconds={t.seconds} streaming={false} />
-            )}
-            {t.todos && t.todos.length > 0 && <TodoPanel todos={t.todos} />}
-            <div className="dfcontent">
-              <Md text={t.text} />
-            </div>
-            {cites.length > 0 && (
-              <div className="cites">
-                {cites.map((c, i) => (
-                  <a key={i} className="cite" href={c.url} target="_blank" rel="noreferrer"
-                     title={c.url}>🔗 {c.label.slice(0, 28)}</a>
-                ))}
-              </div>
-            )}
-            <div className="dftoolbar">
-              <CopyBtn text={t.text} />
-              {onRate && <FeedbackBtns onRate={(r) => onRate(t.key, r)} />}
-              {typeof t.tokens === "number" && (
-                <span className="tokens">{t.tokens.toLocaleString()} tokens</span>
+          <Message key={t.key} from="assistant" className="group/msg">
+            <MessageContent>
+              {t.reasoning && (
+                <ReasoningBlock reasoning={t.reasoning} seconds={t.seconds} streaming={false} />
               )}
-            </div>
-          </div>
+              {t.todos && t.todos.length > 0 && <TodoPanel todos={t.todos} />}
+              <div className="dfcontent">
+                <Md text={t.text} />
+              </div>
+              {cites.length > 0 && (
+                <div className="cites">
+                  {cites.map((c, i) => (
+                    <a key={i} className="cite" href={c.url} target="_blank" rel="noreferrer"
+                       title={c.url}>🔗 {c.label.slice(0, 28)}</a>
+                  ))}
+                </div>
+              )}
+              <MessageToolbar className="opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                <div className="flex gap-1 items-center">
+                  <CopyBtn text={t.text} />
+                  {onRate && <FeedbackBtns onRate={(r) => onRate(t.key, r)} />}
+                  {typeof t.tokens === "number" && (
+                    <span className="tokens">{t.tokens.toLocaleString()} tokens</span>
+                  )}
+                </div>
+              </MessageToolbar>
+            </MessageContent>
+          </Message>
         );
       })}
     </>
+  );
+}
+
+/**
+ * 官方会话容器：Conversation（StickToBottom 贴底）+ 内容 + 回到底部按钮。
+ * 两个会话页共用；替代此前自写的 useStickToBottom + 手动滚动。
+ */
+export function OfficialConversation({ children }: { children: React.ReactNode }) {
+  return (
+    <DFConversation className="flex-1">
+      <ConversationContent className="!gap-7 !p-0 max-w-3xl mx-auto w-full">
+        {children}
+      </ConversationContent>
+      <ConversationScrollButton />
+    </DFConversation>
   );
 }

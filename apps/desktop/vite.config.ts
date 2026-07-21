@@ -1,8 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "tailwindcss";
+import autoprefixer from "autoprefixer";
 
 export default defineConfig({
   plugins: [react()],
+  // 显式挂 PostCSS：postcss.config.js 自动探测在本项目里没生效（@tailwind 未展开）
+  css: { postcss: { plugins: [tailwindcss(), autoprefixer()] } },
   clearScreen: false,
   server: {
     port: 1420,

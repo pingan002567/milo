@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, type MiloEvent } from "../lib/api";
-import { buildTurns, Suggestions, TurnList, useStickToBottom } from "./Conversation";
+import { buildTurns, OfficialConversation, Suggestions, TurnList } from "./Conversation";
 
 /**
  * 成员私聊——全权调教通道（用户决策：私聊里不设任何限制）。
@@ -40,10 +40,6 @@ export function MemberChatView({ org, member, liveEvents }: {
     await api.stopTurn(org, member).catch(() => {});
   };
 
-  // 贴底滚动：用户向上翻看历史时不再被强行拉回（官方 StickToBottom 语义）
-  const { boxRef, atBottom, onScroll, scrollToBottom } = useStickToBottom(
-    `${turns.length}:${turns[turns.length - 1]?.kind === "thinking"
-      ? (turns[turns.length - 1] as any).reasoning.length : 0}`);
 
   const send = async () => {
     const text = input.trim();
@@ -80,7 +76,8 @@ export function MemberChatView({ org, member, liveEvents }: {
         </div>
       </div>
 
-      <div className="dfmsgs secmsgs" ref={boxRef} onScroll={onScroll}>
+      <div className="dfmsgs secmsgs">
+        <OfficialConversation>
         {turns.length === 0 && (
           <div className="card" style={{ padding: 18, maxWidth: 640 }}>
             <div style={{ marginBottom: 6 }}>这是你和 {member} 的私聊：</div>
@@ -88,6 +85,7 @@ export function MemberChatView({ org, member, liveEvents }: {
           </div>
         )}
         <TurnList turns={turns} onRate={(eid, r) => api.feedback(org, gid, eid, r).catch(() => {})} />
+        </OfficialConversation>
       </div>
 
       {files.length > 0 && (
@@ -99,9 +97,6 @@ export function MemberChatView({ org, member, liveEvents }: {
             </span>
           ))}
         </div>
-      )}
-      {!atBottom && (
-        <button className="tobottom" onClick={scrollToBottom} title="回到底部">↓ 最新</button>
       )}
       <div className="composer seccomposer"
            onDragOver={(e) => e.preventDefault()}

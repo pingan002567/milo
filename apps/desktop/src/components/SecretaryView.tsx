@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, type MiloEvent } from "../lib/api";
-import { buildTurns, Suggestions, TurnList, useStickToBottom } from "./Conversation";
+import { buildTurns, OfficialConversation, Suggestions, TurnList } from "./Conversation";
 
 /**
  * 秘书对话页——会话形态对齐 DeerFlow 官方前端（与成员私聊共用 Conversation 组件）。
@@ -38,11 +38,6 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
     await api.stopTurn(org).catch(() => {});
   };
 
-  // 贴底滚动：用户向上翻看历史时不再被强行拉回（官方 StickToBottom 语义）
-  const { boxRef, atBottom, onScroll, scrollToBottom } = useStickToBottom(
-    `${turns.length}:${turns[turns.length - 1]?.kind === "thinking"
-      ? (turns[turns.length - 1] as any).reasoning.length : 0}`);
-
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
@@ -73,14 +68,16 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
         </div>
       </div>
 
-      <div className="dfmsgs secmsgs" ref={boxRef} onScroll={onScroll}>
-        {turns.length === 0 && (
-          <div className="card" style={{ padding: 18, maxWidth: 640 }}>
-            <div style={{ marginBottom: 6 }}>我是你的秘书，可以直接吩咐：</div>
-            <Suggestions items={["团队现在谁在忙？", "有什么在等我拍板的事？", "市场里有哪些模板？"]} onPick={(s) => setInput(s)} />
-          </div>
-        )}
-        <TurnList turns={turns} onRate={(eid, r) => api.feedback(org, "secretary", eid, r).catch(() => {})} />
+      <div className="dfmsgs secmsgs">
+        <OfficialConversation>
+          {turns.length === 0 && (
+            <div className="card" style={{ padding: 18, maxWidth: 640 }}>
+              <div style={{ marginBottom: 6 }}>我是你的秘书，可以直接吩咐：</div>
+              <Suggestions items={["团队现在谁在忙？", "有什么在等我拍板的事？", "市场里有哪些模板？"]} onPick={(s) => setInput(s)} />
+            </div>
+          )}
+          <TurnList turns={turns} onRate={(eid, r) => api.feedback(org, "secretary", eid, r).catch(() => {})} />
+        </OfficialConversation>
       </div>
 
       {files.length > 0 && (
@@ -92,9 +89,6 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
             </span>
           ))}
         </div>
-      )}
-      {!atBottom && (
-        <button className="tobottom" onClick={scrollToBottom} title="回到底部">↓ 最新</button>
       )}
       <div className="composer seccomposer"
            onDragOver={(e) => e.preventDefault()}
