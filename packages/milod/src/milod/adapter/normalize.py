@@ -186,9 +186,10 @@ def iter_normalized(
     held: dict[str, Any] | None = None
     pending_escalation = False  # 见过半截 tool_call，等完整载荷
     buf: list[str] = []
+    think_buf: list[str] = []  # 模型思维链（reasoning_content）——与答案 content 分流
 
     def flush_status() -> Iterator[EventFrame]:
-        # 流式文本 = 成员的思考/工作过程（trace）：入群可查可审计，
+        # 流式文本 = 成员的答案/工作过程（trace）：入群可查可审计，
         # 但不是"汇报"——秘书与验收不消费它（真正的汇报见工具调用 report）
         if buf:
             text = "".join(buf).strip()
@@ -199,6 +200,20 @@ def iter_normalized(
                     task_id=task_id,
                     payload={"doing": text[:400], "kind": "trace",
                              "why": "(untrusted member text)"},
+                )
+
+    def flush_thinking() -> Iterator[EventFrame]:
+        # 思维链（推理模型的 reasoning_content）：这才是"思考块"的内容，
+        # 与答案 content 严格分开。非推理模型不产出它 → 思考块自然为空。
+        if think_buf:
+            text = "".join(think_buf).strip()
+            think_buf.clear()
+            if text:
+                yield EventFrame(
+                    event="status",
+                    task_id=task_id,
+                    payload={"doing": text[:4000], "kind": "thinking",
+                             "why": "(model reasoning)"},
                 )
 
     for ev in stream:
@@ -223,6 +238,7 @@ def iter_normalized(
         if etype == "custom":
             todos = _extract_todos(data)
             if todos is not None:
+                yield from flush_thinking()
                 yield from flush_status()
                 yield EventFrame(event="status", task_id=task_id,
                                  payload={"kind": "todo", "todos": todos,
@@ -240,6 +256,7 @@ def iter_normalized(
         # 有信息量、可被秘书理解——与 token 级 trace 流严格分开
         if (etype == "messages-tuple" and data.get("type") == "tool"
                 and data.get("name") and data.get("name") != "ask_clarification"):
+            yield from flush_thinking()
             yield from flush_status()
             if data.get("name") in ("write_todos", "todo_write"):
                 todos = _extract_todos(data)
@@ -258,9 +275,17 @@ def iter_normalized(
             continue
 
         if etype == "messages-tuple" and data.get("type") == "ai":
+            # 思维链（reasoning_content）与答案（content）分属两个缓冲：
+            # 推理模型把"想"放在 additional_kwargs.reasoning_content（客户端已透出）。
+            ak = data.get("additional_kwargs") or {}
+            rc = ak.get("reasoning_content")
+            if isinstance(rc, str) and rc:
+                think_buf.append(rc)
+                if sum(len(x) for x in think_buf) >= status_min_chars:
+                    yield from flush_thinking()
             text = str(data.get("content") or "")
             if not text.strip():
-                continue
+                continue  # 仅思维链、无答案的分片：已入 think_buf，继续
             marker = parse_marker_escalation(text)
             if marker:
                 held = marker
@@ -270,6 +295,7 @@ def iter_normalized(
                     # 升级之后成员又有新产出 → 升级已被答复（重放场景），撤销
                     held = None
                     pending_escalation = False
+                yield from flush_thinking()  # 答案开始 → 先给思维链收尾
                 buf.append(text)
                 if sum(len(x) for x in buf) >= status_min_chars:
                     yield from flush_status()
@@ -281,6 +307,7 @@ def iter_normalized(
                     break
 
         elif etype == "end":
+            yield from flush_thinking()
             yield from flush_status()
             # 只见半截 tool_call 却始终没等到完整载荷：仍需上报中断，否则任务会静默卡死
             if pending_escalation and held is None:

@@ -34,7 +34,7 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
 
   const turns = useMemo(() => buildTurns(events), [events]);
   // 末回合是 thinking = 对方正在跑：此时发送键变「停止」
-  const streaming = turns.length > 0 && turns[turns.length - 1].kind === "thinking";
+  const streaming = turns.length > 0 && turns[turns.length - 1].kind === "streaming";
 
   const stop = async () => {
     await api.stopTurn(org).catch(() => {});

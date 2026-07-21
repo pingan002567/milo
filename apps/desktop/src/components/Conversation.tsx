@@ -24,7 +24,8 @@ export type Turn =
   | { kind: "user"; key: string; text: string }
   | { kind: "assistant"; key: string; text: string; reasoning: string; seconds: number | null;
       tokens?: number | null; todos?: Array<{ content: string; status: string }> }
-  | { kind: "thinking"; key: string; reasoning: string; startTs: string };
+  // 实时回合：answer=答案流式预览（trace/content），reasoning=思维链（reasoning_content）
+  | { kind: "streaming"; key: string; answer: string; reasoning: string; startTs: string | null };
 
 /** 空态建议（官方 suggestion 形态）：点一下即发，不用手打。 */
 export function Suggestions({ items, onPick }: {
@@ -72,44 +73,58 @@ function extractCitations(text: string): Array<{ label: string; url: string }> {
   return out;
 }
 
-/** 事件流 → 回合：回复前累积的 status（trace 流）归组为该回复的思考块。 */
+/**
+ * 事件流 → 回合。两条流严格分开（编制设计 · 思考块语义）：
+ *   status/kind=thinking（reasoning_content）→ think：真思维链，进"思考块"
+ *   status/kind=trace|report（content 流）    → answer：答案的流式预览
+ * 回复（chat）到达即定稿：正文取 chat 文本，思考块取累积的 think；
+ * answer 只是流式期间的实时预览，定稿时丢弃（不再和答案重复）。
+ */
 export function buildTurns(events: MiloEvent[]): Turn[] {
   const turns: Turn[] = [];
-  let buf = "";
-  let bufStart: string | null = null;
+  let think = "";
+  let thinkStart: string | null = null;
+  let answer = "";
   let todos: Array<{ content: string; status: string }> | undefined;
   let tokens: number | null | undefined;
+  const reset = () => { think = ""; thinkStart = null; answer = ""; };
   for (const e of events) {
     if (e.type === "system") {
       if (typeof e.payload?.tokens === "number") tokens = e.payload.tokens;
       continue;
     }
     if (e.type === "status") {
-      if (e.payload?.kind === "todo" && Array.isArray(e.payload.todos)) {
+      const kind = e.payload?.kind;
+      if (kind === "todo" && Array.isArray(e.payload.todos)) {
         todos = e.payload.todos;   // 后到的覆盖：TODO 是状态快照不是流水
         continue;
       }
-      if (e.payload?.kind === "subagent") continue;  // 子代理进度并入动作行，不入思考块
-      if (!buf) bufStart = e.ts;
-      buf += String(e.payload?.doing ?? e.content ?? "");
+      if (kind === "subagent") continue;  // 子代理进度并入动作行
+      const chunk = String(e.payload?.doing ?? e.content ?? "");
+      if (kind === "thinking") {
+        if (!think) thinkStart = e.ts;
+        think += chunk;            // 思维链 → 思考块
+      } else {
+        answer += chunk;           // trace/report → 答案流式预览
+      }
       continue;
     }
     if (e.type !== "chat") continue;
     const text = String(e.payload?.text ?? e.content ?? "");
     if (e.actor === "owner") {
-      buf = ""; bufStart = null; // 用户发言重置思考缓冲
+      reset(); // 用户发言重置缓冲
       turns.push({ kind: "user", key: e.event_id, text });
     } else {
-      const seconds = bufStart
-        ? Math.max(1, Math.round((Date.parse(e.ts) - Date.parse(bufStart)) / 1000))
+      const seconds = thinkStart
+        ? Math.max(1, Math.round((Date.parse(e.ts) - Date.parse(thinkStart)) / 1000))
         : null;
-      turns.push({ kind: "assistant", key: e.event_id, text, reasoning: buf, seconds,
+      turns.push({ kind: "assistant", key: e.event_id, text, reasoning: think, seconds,
                    tokens, todos });
-      buf = ""; bufStart = null; todos = undefined; tokens = undefined;
+      reset(); todos = undefined; tokens = undefined;
     }
   }
-  if (buf) {
-    turns.push({ kind: "thinking", key: "live", reasoning: buf, startTs: bufStart! });
+  if (answer || think) {
+    turns.push({ kind: "streaming", key: "live", answer, reasoning: think, startTs: thinkStart });
   }
   return turns;
 }
@@ -182,11 +197,19 @@ export function TurnList({ turns, onRate }: {
             </Message>
           );
         }
-        if (t.kind === "thinking") {
+        if (t.kind === "streaming") {
           return (
             <Message key={t.key} from="assistant">
               <MessageContent>
-                <ReasoningBlock reasoning={t.reasoning} seconds={null} streaming />
+                {/* 思考块：仅在有思维链时显示；答案未开始前维持"思考中…" */}
+                {t.reasoning && (
+                  <ReasoningBlock reasoning={t.reasoning} seconds={null} streaming={!t.answer} />
+                )}
+                {t.answer ? (
+                  <div className="dfcontent"><Md text={t.answer} /></div>
+                ) : (
+                  !t.reasoning && <Shimmer duration={1}>正在输入…</Shimmer>
+                )}
               </MessageContent>
             </Message>
           );
