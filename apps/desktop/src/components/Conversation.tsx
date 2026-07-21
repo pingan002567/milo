@@ -9,6 +9,7 @@ import {
 } from "./ai-elements/chain-of-thought";
 import { Message, MessageContent, MessageToolbar } from "./ai-elements/message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "./ai-elements/reasoning";
+import { Shimmer } from "./ai-elements/shimmer";
 import { Sources, SourcesContent, SourcesTrigger, Source } from "./ai-elements/sources";
 import { ChevronDownIcon } from "lucide-react";
 import { Md } from "./Md";
@@ -117,13 +118,20 @@ export function buildTurns(events: MiloEvent[]): Turn[] {
  * 思考块——直接用官方 Reasoning/ReasoningTrigger/ReasoningContent 组件
  * （流式默认展开、完成后 1s 自动收起、LiveTimer 计时全由官方组件实现）。
  */
+/** 思考条文案中文化——用官方预留的 getThinkingMessage 扩展点，不改组件本体。 */
+function zhThinking(isStreaming: boolean, duration?: number): React.ReactNode {
+  if (isStreaming) return <Shimmer duration={1}>思考中…</Shimmer>;
+  if (duration === undefined) return <span>思考了一会儿</span>;
+  return <span>思考了 {duration} 秒</span>;
+}
+
 export function ReasoningBlock({ reasoning, seconds, streaming }: {
   reasoning: string; seconds: number | null; streaming: boolean;
 }) {
   return (
     <Reasoning isStreaming={streaming} duration={seconds ?? undefined}
                className="text-sm">
-      <ReasoningTrigger hasContent={!!reasoning} />
+      <ReasoningTrigger hasContent={!!reasoning} getThinkingMessage={zhThinking} />
       {reasoning && <ReasoningContent>{reasoning.slice(-2000)}</ReasoningContent>}
     </Reasoning>
   );
