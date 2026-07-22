@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUp, Paperclip, RotateCcw, Square } from "lucide-react";
+import { ArrowUp, Check, Paperclip, RotateCcw, Square, Wrench } from "lucide-react";
 import type { MiloEvent } from "../lib/api";
 import {
   Conversation as DFConversation, ConversationContent, ConversationScrollButton,
@@ -20,12 +20,17 @@ import { Md } from "./Md";
  * 秘书页与成员私聊共用；Milo 扩展（TODO/引用/用量/反馈）挂在官方组件上。
  */
 
+/** 工具调用步骤（report 事件）——渲染成时间线卡（对齐 stock-agent 的 AI Copilot）。 */
+export type ToolStep = { tool: string; snippet?: string };
+
 export type Turn =
-  | { kind: "user"; key: string; text: string }
+  | { kind: "user"; key: string; text: string; ts: string }
   | { kind: "assistant"; key: string; text: string; reasoning: string; seconds: number | null;
+      ts: string; tools: ToolStep[];
       tokens?: number | null; todos?: Array<{ content: string; status: string }> }
   // 实时回合：answer=答案流式预览（trace/content），reasoning=思维链（reasoning_content）
-  | { kind: "streaming"; key: string; answer: string; reasoning: string; startTs: string | null };
+  | { kind: "streaming"; key: string; answer: string; reasoning: string; startTs: string | null;
+      tools: ToolStep[] };
 
 /** 空态建议（官方 suggestion 形态）：点一下即发，不用手打。 */
 export function Suggestions({ items, onPick }: {
@@ -85,9 +90,10 @@ export function buildTurns(events: MiloEvent[]): Turn[] {
   let think = "";
   let thinkStart: string | null = null;
   let answer = "";
+  let tools: ToolStep[] = [];
   let todos: Array<{ content: string; status: string }> | undefined;
   let tokens: number | null | undefined;
-  const reset = () => { think = ""; thinkStart = null; answer = ""; };
+  const reset = () => { think = ""; thinkStart = null; answer = ""; tools = []; };
   for (const e of events) {
     if (e.type === "system") {
       if (typeof e.payload?.tokens === "number") tokens = e.payload.tokens;
@@ -100,12 +106,19 @@ export function buildTurns(events: MiloEvent[]): Turn[] {
         continue;
       }
       if (kind === "subagent") continue;  // 子代理进度并入动作行
+      if (kind === "report") {            // 工具调用 → 时间线步骤（不进答案）
+        const tool = String(e.payload?.tool ?? "").trim();
+        const doing = String(e.payload?.doing ?? "");
+        const snippet = doing.includes("：") ? doing.split("：").slice(1).join("：") : "";
+        if (tool) tools.push({ tool, snippet: snippet || undefined });
+        continue;
+      }
       const chunk = String(e.payload?.doing ?? e.content ?? "");
       if (kind === "thinking") {
         if (!think) thinkStart = e.ts;
         think += chunk;            // 思维链 → 思考块
       } else {
-        answer += chunk;           // trace/report → 答案流式预览
+        answer += chunk;           // trace → 答案流式预览
       }
       continue;
     }
@@ -113,18 +126,19 @@ export function buildTurns(events: MiloEvent[]): Turn[] {
     const text = String(e.payload?.text ?? e.content ?? "");
     if (e.actor === "owner") {
       reset(); // 用户发言重置缓冲
-      turns.push({ kind: "user", key: e.event_id, text });
+      turns.push({ kind: "user", key: e.event_id, text, ts: e.ts });
     } else {
       const seconds = thinkStart
         ? Math.max(1, Math.round((Date.parse(e.ts) - Date.parse(thinkStart)) / 1000))
         : null;
       turns.push({ kind: "assistant", key: e.event_id, text, reasoning: think, seconds,
-                   tokens, todos });
+                   ts: e.ts, tools, tokens, todos });
       reset(); todos = undefined; tokens = undefined;
     }
   }
-  if (answer || think) {
-    turns.push({ kind: "streaming", key: "live", answer, reasoning: think, startTs: thinkStart });
+  if (answer || think || tools.length) {
+    turns.push({ kind: "streaming", key: "live", answer, reasoning: think,
+                 startTs: thinkStart, tools });
   }
   return turns;
 }
@@ -180,9 +194,81 @@ export function CopyBtn({ text }: { text: string }) {
   );
 }
 
+/** ISO 时间戳 → HH:MM:SS（对齐 stock-agent 的消息时间显示）。 */
+function formatTime(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/** 常见工具名 → 中文动作名（对齐截图的「草案列表 list_rebalance_drafts」双标签）。 */
+const TOOL_LABELS: Record<string, string> = {
+  write_todos: "更新计划", todo_write: "更新计划",
+  read_file: "读取文件", write_file: "写入文件", str_replace: "编辑文件",
+  edit_file: "编辑文件", create_file: "创建文件", list_dir: "浏览目录",
+  bash: "执行命令", run_command: "执行命令", python_repl: "运行代码",
+  web_search: "联网检索", fetch_url: "抓取网页", get_artifact: "读取产物",
+  ask_clarification: "发起请示",
+};
+function toolLabel(tool: string): string {
+  return TOOL_LABELS[tool] ?? tool;
+}
+
+/**
+ * 工具调用时间线卡——对齐 stock-agent 的 AI Copilot：每步 🔧 图标 + 中文动作名 +
+ * 工具名(mono) + ✓；步骤多时可「收起早期步骤」。数据来自 report 事件（工具执行完成）。
+ */
+export function ToolTimeline({ tools, live }: { tools: ToolStep[]; live?: boolean }) {
+  const [showEarly, setShowEarly] = useState(true);  // 默认展开（对齐参考：按钮为「收起早期步骤」）
+  if (tools.length === 0) return null;
+  const KEEP = 3;
+  const canCollapse = tools.length > KEEP + 1;
+  const hidden = canCollapse && !showEarly ? tools.length - KEEP : 0;
+  const shown = hidden > 0 ? tools.slice(hidden) : tools;
+  return (
+    <div className={`tool-timeline ${live ? "live" : ""}`}>
+      {canCollapse && (
+        <button className="tool-collapse" onClick={() => setShowEarly((v) => !v)}>
+          {showEarly ? "收起早期步骤" : `展开早期 ${hidden} 步`}
+        </button>
+      )}
+      {shown.map((s, i) => {
+        const label = toolLabel(s.tool);
+        const dup = label === s.tool;   // 无中文映射时不重复展示
+        return (
+          <div key={i} className="tool-row" title={s.snippet}>
+            <span className="tool-ico"><Wrench size={13} /></span>
+            <span className="tool-label">{label}</span>
+            {!dup && <span className="tool-name">{s.tool}</span>}
+            <Check className="tool-check" size={16} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 消息署名行：头像 + 名字 + 时间戳（对齐 stock-agent 的 "AI Copilot 01:31:53"）。 */
+export function MessageHeader({ name, accent, ts }: {
+  name: string; accent?: boolean; ts?: string;
+}) {
+  const style = accent
+    ? undefined
+    : { background: `hsl(${avatarHue(name)} 42% 46%)`, color: "#fff" };
+  return (
+    <div className="msg-head">
+      <span className={`mh-ava ${accent ? "accent" : ""}`} style={style}>{avatarText(name)}</span>
+      <span className="mh-name">{name}</span>
+      {ts && <span className="mh-ts">{formatTime(ts)}</span>}
+    </div>
+  );
+}
+
 /** 回合列表——用官方 Message/MessageContent 原语，Milo 扩展挂在其上。 */
-export function TurnList({ turns, onRate }: {
+export function TurnList({ turns, onRate, assistantName = "助手", assistantAccent }: {
   turns: Turn[]; onRate?: (eventId: string, rating: number) => void;
+  assistantName?: string; assistantAccent?: boolean;
 }) {
   return (
     <>
@@ -190,7 +276,10 @@ export function TurnList({ turns, onRate }: {
         if (t.kind === "user") {
           return (
             <Message key={t.key} from="user" className="group/msg relative">
-              <MessageContent>{t.text}</MessageContent>
+              <MessageContent>
+                {t.text}
+                {t.ts && <span className="bubble-ts">{formatTime(t.ts)}</span>}
+              </MessageContent>
               {/* 工具条绝对定位、不占流内高度：否则每条消息后都留一段空带，
                   非悬停时看着像空隙、悬停时又冒出一个孤零零的「复制」。 */}
               <MessageToolbar className="!mt-0 absolute top-full right-0 opacity-0 group-hover/msg:opacity-100 transition-opacity z-10">
@@ -202,15 +291,17 @@ export function TurnList({ turns, onRate }: {
         if (t.kind === "streaming") {
           return (
             <Message key={t.key} from="assistant">
+              <MessageHeader name={assistantName} accent={assistantAccent} />
               <MessageContent>
                 {/* 思考块：仅在有思维链时显示；答案未开始前维持"思考中…" */}
                 {t.reasoning && (
                   <ReasoningBlock reasoning={t.reasoning} seconds={null} streaming={!t.answer} />
                 )}
+                {t.tools.length > 0 && <ToolTimeline tools={t.tools} live />}
                 {t.answer ? (
                   <div className="dfcontent"><Md text={t.answer} /></div>
                 ) : (
-                  !t.reasoning && <Shimmer duration={1}>正在输入…</Shimmer>
+                  !t.reasoning && !t.tools.length && <Shimmer duration={1}>正在输入…</Shimmer>
                 )}
               </MessageContent>
             </Message>
@@ -219,10 +310,12 @@ export function TurnList({ turns, onRate }: {
         const cites = extractCitations(t.text);
         return (
           <Message key={t.key} from="assistant" className="group/msg">
+            <MessageHeader name={assistantName} accent={assistantAccent} ts={t.ts} />
             <MessageContent className="relative">
               {t.reasoning && (
                 <ReasoningBlock reasoning={t.reasoning} seconds={t.seconds} streaming={false} />
               )}
+              {t.tools.length > 0 && <ToolTimeline tools={t.tools} />}
               {t.todos && t.todos.length > 0 && <TodoPanel todos={t.todos} />}
               <div className="dfcontent">
                 <Md text={t.text} />

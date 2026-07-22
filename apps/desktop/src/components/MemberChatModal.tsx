@@ -84,7 +84,8 @@ export function MemberChatView({ org, member, liveEvents }: {
               <Suggestions items={["介绍一下你自己和你的工作方式", "以后写代码注释一律用中文，写进你的人设"]} onPick={(s) => setInput(s)} />
             </div>
           )}
-          <TurnList turns={turns} onRate={(eid, r) => api.feedback(org, gid, eid, r).catch(() => {})} />
+          <TurnList turns={turns} assistantName={member}
+                    onRate={(eid, r) => api.feedback(org, gid, eid, r).catch(() => {})} />
         </OfficialConversation>
       </div>
 

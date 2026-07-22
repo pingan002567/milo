@@ -76,7 +76,8 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
               <Suggestions items={["团队现在谁在忙？", "有什么在等我拍板的事？", "市场里有哪些模板？"]} onPick={(s) => setInput(s)} />
             </div>
           )}
-          <TurnList turns={turns} onRate={(eid, r) => api.feedback(org, "secretary", eid, r).catch(() => {})} />
+          <TurnList turns={turns} assistantName="秘书" assistantAccent
+                    onRate={(eid, r) => api.feedback(org, "secretary", eid, r).catch(() => {})} />
         </OfficialConversation>
       </div>
 
