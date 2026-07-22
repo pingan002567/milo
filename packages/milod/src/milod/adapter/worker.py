@@ -52,6 +52,9 @@ class Worker:
         self._agent: str = ""    # harness 运行名（ASCII slug）
         self._threads: dict[str, str] = {}
         self._cancelled: set[str] = set()
+        # 每线程"已交付的 harness 消息 id"。resume 时客户端会用 values 快照重放整段
+        # 历史消息（其 seen_ids 是 per-call 的）——据此丢弃，避免新回复前先刷历史。
+        self._delivered_ids: dict[str, set[str]] = {}
 
     # ---- 方法 ----------------------------------------------------------
     def enroll(self, params: dict) -> dict:
@@ -169,6 +172,7 @@ class Worker:
         # 让下一条消息重新 assign（建全新线程状态）
         self._chat_channels = getattr(self, "_chat_channels", set())
         self._chat_channels.discard(channel)
+        self._delivered_ids.pop(thread_id, None)  # 历史清空 → 去重登记也清空
         return {"channel": channel, "removed": removed}
 
     def cancel(self, params: dict) -> dict:
@@ -184,6 +188,27 @@ class Worker:
         print(f"[cancel] mark {task_id!r}", file=sys.stderr, flush=True)
         return {"task_id": task_id, "cancelled": True}
 
+    def _drop_replayed(self, gen: Any, thread_id: str) -> Any:
+        """滤掉 resume 时被 values 快照重放的历史消息。
+
+        harness 客户端在 resume 里会把线程内**所有**消息从 values 快照重新合成为
+        messages-tuple 事件（它的 seen_ids 是 per-call 的），于是新回复开始前先刷出
+        整段历史。官方前端靠 message id 去重；我们在此按 id 去重：
+        prior（上一轮结束时已交付的 id，本轮开始冻结）里出现过的 messages-tuple 直接丢，
+        本轮新 id 照常放行并登记——用冻结快照判断，保证新回复自身的流式增量不被误杀。
+        """
+        prior = frozenset(self._delivered_ids.get(thread_id, ()))
+        delivered = self._delivered_ids.setdefault(thread_id, set())
+        for ev in gen:
+            data = getattr(ev, "data", None)
+            etype = getattr(ev, "type", None)
+            mid = data.get("id") if isinstance(data, dict) else None
+            if etype == "messages-tuple" and mid and mid in prior:
+                continue
+            if etype == "messages-tuple" and mid:
+                delivered.add(mid)
+            yield ev
+
     def _pump(self, task_id: str, message: str, thread_id: str,
               *, plan_mode: bool = False) -> None:
         """plan_mode 按通道开关（实测结论）：
@@ -198,6 +223,7 @@ class Worker:
         # 只作用于成员私聊（task_id=="dm"），不碰秘书 chat（同 worker 但语义不同）。
         msg = _DM_GUIDANCE + message if task_id == "dm" else message
         gen = self._client.stream(msg, thread_id=thread_id, plan_mode=plan_mode)
+        gen = self._drop_replayed(gen, thread_id)  # 滤掉 resume 时重放的历史消息
         aborted = False
         try:
             for frame in iter_normalized(gen, task_id=task_id):
