@@ -664,21 +664,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 .bubble-ts { display: block; margin-top: 4px; font-size: 11.5px; color: var(--ink-3);
   font-variant-numeric: tabular-nums; opacity: .8; }
 
-/* 工具调用时间线卡 */
-.tool-timeline { border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
-  padding: 6px 14px; margin-bottom: 10px; box-shadow: var(--shadow); }
-.tool-timeline.live { border-color: var(--pine-soft); }
-.tool-collapse { display: block; border: none; background: none; cursor: pointer;
-  color: var(--ink-3); font-size: 12px; padding: 8px 0 4px; }
-.tool-collapse:hover { color: var(--pine); }
-.tool-row { display: flex; align-items: center; gap: 11px; padding: 8px 0; }
-.tool-row + .tool-row { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
-.tool-ico { width: 26px; height: 26px; border-radius: 50%; flex: none;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--panel-2); color: var(--ink-3); }
-.tool-label { font-size: 13.5px; font-weight: 650; color: var(--ink); }
-.tool-name { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
-.tool-check { margin-left: auto; flex: none; color: var(--green); }
+/* 工具调用行（紧凑审计式，对齐任务群）：⚙ 工具名 + 结果摘要 + ✓，一行一条。
+   多轮时思考块与工具行按时序交错，轮次一目了然。 */
+.tool-line { display: flex; align-items: baseline; gap: 7px; min-width: 0;
+  font-size: 12.5px; color: var(--ink-3); padding: 3px 0 3px 2px; }
+.tool-line .tl-ico { position: relative; top: 2px; flex: none; color: var(--ink-3); }
+.tool-line > b { flex: none; color: var(--ink-2); font-weight: 600;
+  font-family: var(--mono); font-size: 12px; }
+.tool-line .tl-cn { flex: none; color: var(--ink-3); font-size: 11.5px; }
+.tool-line .tl-res { min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
+.tool-line .tl-ok { flex: none; margin-left: auto; align-self: center; color: var(--green); }
 
 /* 信心度徽章 + 消息底部 footer（对齐 stock-agent「信心度 中 · 引用来源 8」）*/
 .msg-footer { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;

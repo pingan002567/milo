@@ -20,17 +20,21 @@ import { Md } from "./Md";
  * 秘书页与成员私聊共用；Milo 扩展（TODO/引用/用量/反馈）挂在官方组件上。
  */
 
-/** 工具调用步骤（report 事件）——渲染成时间线卡（对齐 stock-agent 的 AI Copilot）。 */
-export type ToolStep = { tool: string; snippet?: string };
+/**
+ * 回合内的活动项——**按时序**排列思考段与工具调用（解决"多轮思考看不出轮次"）。
+ * 每个 reasoning 段 = 一轮思考（被工具调用切分）；tool = 一次工具调用（带结果摘要）。
+ */
+export type ActivityItem =
+  | { kind: "reasoning"; text: string; seconds: number | null }
+  | { kind: "tool"; tool: string; snippet?: string };
 
 export type Turn =
   | { kind: "user"; key: string; text: string; ts: string }
-  | { kind: "assistant"; key: string; text: string; reasoning: string; seconds: number | null;
-      ts: string; tools: ToolStep[]; confidence?: "high" | "medium" | "low";
+  | { kind: "assistant"; key: string; text: string; ts: string;
+      activity: ActivityItem[]; confidence?: "high" | "medium" | "low";
       tokens?: number | null; todos?: Array<{ content: string; status: string }> }
-  // 实时回合：answer=答案流式预览（trace/content），reasoning=思维链（reasoning_content）
-  | { kind: "streaming"; key: string; answer: string; reasoning: string; startTs: string | null;
-      tools: ToolStep[] };
+  // 实时回合：activity=已发生的思考/工具（按时序），answer=答案流式预览
+  | { kind: "streaming"; key: string; activity: ActivityItem[]; answer: string };
 
 /** 空态建议（官方 suggestion 形态）：点一下即发，不用手打。 */
 export function Suggestions({ items, onPick }: {
@@ -87,13 +91,20 @@ function extractCitations(text: string): Array<{ label: string; url: string }> {
  */
 export function buildTurns(events: MiloEvent[]): Turn[] {
   const turns: Turn[] = [];
-  let think = "";
-  let thinkStart: string | null = null;
+  let activity: ActivityItem[] = [];
+  let rbuf = "";                       // 当前思考段（被工具/答案切分成一轮）
+  let rstart: string | null = null;
   let answer = "";
-  let tools: ToolStep[] = [];
   let todos: Array<{ content: string; status: string }> | undefined;
   let tokens: number | null | undefined;
-  const reset = () => { think = ""; thinkStart = null; answer = ""; tools = []; };
+  const flushReasoning = (endTs: string | null) => {
+    if (!rbuf) return;
+    const seconds = rstart && endTs
+      ? Math.max(1, Math.round((Date.parse(endTs) - Date.parse(rstart)) / 1000)) : null;
+    activity.push({ kind: "reasoning", text: rbuf, seconds });
+    rbuf = ""; rstart = null;
+  };
+  const reset = () => { activity = []; rbuf = ""; rstart = null; answer = ""; };
   for (const e of events) {
     if (e.type === "system") {
       if (typeof e.payload?.tokens === "number") tokens = e.payload.tokens;
@@ -106,17 +117,18 @@ export function buildTurns(events: MiloEvent[]): Turn[] {
         continue;
       }
       if (kind === "subagent") continue;  // 子代理进度并入动作行
-      if (kind === "report") {            // 工具调用 → 时间线步骤（不进答案）
+      if (kind === "report") {            // 工具调用 → 时序活动项（切一轮思考）
+        flushReasoning(e.ts);
         const tool = String(e.payload?.tool ?? "").trim();
         const doing = String(e.payload?.doing ?? "");
         const snippet = doing.includes("：") ? doing.split("：").slice(1).join("：") : "";
-        if (tool) tools.push({ tool, snippet: snippet || undefined });
+        if (tool) activity.push({ kind: "tool", tool, snippet: snippet || undefined });
         continue;
       }
       const chunk = String(e.payload?.doing ?? e.content ?? "");
       if (kind === "thinking") {
-        if (!think) thinkStart = e.ts;
-        think += chunk;            // 思维链 → 思考块
+        if (!rbuf) rstart = e.ts;
+        rbuf += chunk;             // 思维链 → 当前思考段
       } else {
         answer += chunk;           // trace → 答案流式预览
       }
@@ -128,18 +140,16 @@ export function buildTurns(events: MiloEvent[]): Turn[] {
       reset(); // 用户发言重置缓冲
       turns.push({ kind: "user", key: e.event_id, text, ts: e.ts });
     } else {
-      const seconds = thinkStart
-        ? Math.max(1, Math.round((Date.parse(e.ts) - Date.parse(thinkStart)) / 1000))
-        : null;
+      flushReasoning(e.ts);        // 收尾最后一轮思考
       const confidence = e.payload?.confidence as ("high" | "medium" | "low" | undefined);
-      turns.push({ kind: "assistant", key: e.event_id, text, reasoning: think, seconds,
-                   ts: e.ts, tools, confidence, tokens, todos });
+      turns.push({ kind: "assistant", key: e.event_id, text, ts: e.ts,
+                   activity, confidence, tokens, todos });
       reset(); todos = undefined; tokens = undefined;
     }
   }
-  if (answer || think || tools.length) {
-    turns.push({ kind: "streaming", key: "live", answer, reasoning: think,
-                 startTs: thinkStart, tools });
+  if (rbuf || answer || activity.length) {
+    flushReasoning(null);          // 进行中的思考段先落项（流式渲染时标为进行中）
+    turns.push({ kind: "streaming", key: "live", activity, answer });
   }
   return turns;
 }
@@ -216,37 +226,41 @@ function toolLabel(tool: string): string {
   return TOOL_LABELS[tool] ?? tool;
 }
 
-/**
- * 工具调用时间线卡——对齐 stock-agent 的 AI Copilot：每步 🔧 图标 + 中文动作名 +
- * 工具名(mono) + ✓；步骤多时可「收起早期步骤」。数据来自 report 事件（工具执行完成）。
- */
-export function ToolTimeline({ tools, live }: { tools: ToolStep[]; live?: boolean }) {
-  const [showEarly, setShowEarly] = useState(true);  // 默认展开（对齐参考：按钮为「收起早期步骤」）
-  if (tools.length === 0) return null;
-  const KEEP = 3;
-  const canCollapse = tools.length > KEEP + 1;
-  const hidden = canCollapse && !showEarly ? tools.length - KEEP : 0;
-  const shown = hidden > 0 ? tools.slice(hidden) : tools;
+/** 单条工具调用行（紧凑审计式，对齐任务群）：⚙ 工具名 + 结果摘要。 */
+function ToolLine({ tool, snippet }: { tool: string; snippet?: string }) {
+  const label = toolLabel(tool);
   return (
-    <div className={`tool-timeline ${live ? "live" : ""}`}>
-      {canCollapse && (
-        <button className="tool-collapse" onClick={() => setShowEarly((v) => !v)}>
-          {showEarly ? "收起早期步骤" : `展开早期 ${hidden} 步`}
-        </button>
-      )}
-      {shown.map((s, i) => {
-        const label = toolLabel(s.tool);
-        const dup = label === s.tool;   // 无中文映射时不重复展示
-        return (
-          <div key={i} className="tool-row" title={s.snippet}>
-            <span className="tool-ico"><Wrench size={13} /></span>
-            <span className="tool-label">{label}</span>
-            {!dup && <span className="tool-name">{s.tool}</span>}
-            <Check className="tool-check" size={16} />
-          </div>
-        );
-      })}
+    <div className="tool-line" title={snippet}>
+      <Wrench size={12} className="tl-ico" />
+      <b>{tool}</b>
+      {label !== tool && <span className="tl-cn">{label}</span>}
+      {snippet && <span className="tl-res">: {snippet}</span>}
+      <Check className="tl-ok" size={13} />
     </div>
+  );
+}
+
+/**
+ * 活动日志——按时序渲染回合内的思考段与工具调用（Part B + 多轮思考）。
+ * 多个 reasoning 段交错在工具行之间 = 多轮，一眼可见；工具行带结果摘要。
+ * streaming 时最后一个思考段标为进行中（若答案尚未开始）。
+ */
+export function ActivityLog({ items, streamingTail }: {
+  items: ActivityItem[]; streamingTail?: boolean;
+}) {
+  let lastR = -1;
+  items.forEach((it, i) => { if (it.kind === "reasoning") lastR = i; });
+  return (
+    <>
+      {items.map((it, i) =>
+        it.kind === "reasoning" ? (
+          <ReasoningBlock key={i} reasoning={it.text} seconds={it.seconds}
+                          streaming={!!streamingTail && i === lastR} />
+        ) : (
+          <ToolLine key={i} tool={it.tool} snippet={it.snippet} />
+        ),
+      )}
+    </>
   );
 }
 
@@ -300,15 +314,12 @@ export function TurnList({ turns, onRate, assistantName = "助手", assistantAcc
             <Message key={t.key} from="assistant">
               <MessageHeader name={assistantName} accent={assistantAccent} />
               <MessageContent>
-                {/* 思考块：仅在有思维链时显示；答案未开始前维持"思考中…" */}
-                {t.reasoning && (
-                  <ReasoningBlock reasoning={t.reasoning} seconds={null} streaming={!t.answer} />
-                )}
-                {t.tools.length > 0 && <ToolTimeline tools={t.tools} live />}
+                {/* 按时序：思考段（最后一段进行中）与工具行交错——答案未开始前思考块保持"思考中…" */}
+                <ActivityLog items={t.activity} streamingTail={!t.answer} />
                 {t.answer ? (
                   <div className="dfcontent"><Md text={t.answer} /></div>
                 ) : (
-                  !t.reasoning && !t.tools.length && <Shimmer duration={1}>正在输入…</Shimmer>
+                  t.activity.length === 0 && <Shimmer duration={1}>正在输入…</Shimmer>
                 )}
               </MessageContent>
             </Message>
@@ -319,10 +330,8 @@ export function TurnList({ turns, onRate, assistantName = "助手", assistantAcc
           <Message key={t.key} from="assistant" className="group/msg">
             <MessageHeader name={assistantName} accent={assistantAccent} ts={t.ts} />
             <MessageContent className="relative">
-              {t.reasoning && (
-                <ReasoningBlock reasoning={t.reasoning} seconds={t.seconds} streaming={false} />
-              )}
-              {t.tools.length > 0 && <ToolTimeline tools={t.tools} />}
+              {/* 按时序：思考段与工具行交错——多个思考段 = 多轮，一目了然 */}
+              <ActivityLog items={t.activity} />
               {t.todos && t.todos.length > 0 && <TodoPanel todos={t.todos} />}
               <div className="dfcontent">
                 <Md text={t.text} />
