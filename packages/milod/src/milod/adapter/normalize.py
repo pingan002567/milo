@@ -32,6 +32,29 @@ _ESCALATE_RE = re.compile(
     rf"```(?:json|yaml)?\s*{ESCALATE_MARKER}\s*(?P<body>\{{.*?\}})\s*```", re.DOTALL
 )
 
+#: 信心度自评：成员在结尾标注对本次答复的把握。只解析、不臆造——没标就没有徽章。
+_CONFIDENCE_RE = re.compile(
+    r"[\[\(【]?\s*(?:信心度|把握|confidence)\s*[:：]?\s*"
+    r"(?P<level>高|中|低|high|medium|low|hi|mid|lo)\s*[\]\)】]?\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_CONF_MAP = {"高": "high", "hi": "high", "high": "high",
+             "中": "medium", "mid": "medium", "medium": "medium",
+             "低": "low", "lo": "low", "low": "low"}
+
+
+def parse_confidence(text: str) -> tuple[str | None, str]:
+    """从答复末尾抽出成员自评的信心度，返回 (level|None, 去掉该标注的正文)。"""
+    m = None
+    for m in _CONFIDENCE_RE.finditer(text):
+        pass  # 取最后一处（正文结尾的那条）
+    if not m:
+        return None, text
+    level = _CONF_MAP.get(m.group("level").lower())
+    if not level:
+        return None, text
+    return level, text[: m.start()].rstrip()
+
 
 def find_clarification_args(data: dict[str, Any]) -> dict[str, Any] | None:
     """定位澄清请求的载荷（SPIKE-02 实测三处位置）。
@@ -324,6 +347,8 @@ def iter_normalized(
                          "tokens": usage.get("total_tokens")},
             )
             if held is None:
-                yield EventFrame(
-                    event="delivery", task_id=task_id, payload={"summary": last_text[:2000]}
-                )
+                conf, summary = parse_confidence(last_text)
+                payload: dict[str, Any] = {"summary": summary[:2000]}
+                if conf:
+                    payload["confidence"] = conf
+                yield EventFrame(event="delivery", task_id=task_id, payload=payload)

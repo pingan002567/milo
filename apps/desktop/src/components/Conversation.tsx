@@ -26,7 +26,7 @@ export type ToolStep = { tool: string; snippet?: string };
 export type Turn =
   | { kind: "user"; key: string; text: string; ts: string }
   | { kind: "assistant"; key: string; text: string; reasoning: string; seconds: number | null;
-      ts: string; tools: ToolStep[];
+      ts: string; tools: ToolStep[]; confidence?: "high" | "medium" | "low";
       tokens?: number | null; todos?: Array<{ content: string; status: string }> }
   // 实时回合：answer=答案流式预览（trace/content），reasoning=思维链（reasoning_content）
   | { kind: "streaming"; key: string; answer: string; reasoning: string; startTs: string | null;
@@ -131,8 +131,9 @@ export function buildTurns(events: MiloEvent[]): Turn[] {
       const seconds = thinkStart
         ? Math.max(1, Math.round((Date.parse(e.ts) - Date.parse(thinkStart)) / 1000))
         : null;
+      const confidence = e.payload?.confidence as ("high" | "medium" | "low" | undefined);
       turns.push({ kind: "assistant", key: e.event_id, text, reasoning: think, seconds,
-                   ts: e.ts, tools, tokens, todos });
+                   ts: e.ts, tools, confidence, tokens, todos });
       reset(); todos = undefined; tokens = undefined;
     }
   }
@@ -249,6 +250,12 @@ export function ToolTimeline({ tools, live }: { tools: ToolStep[]; live?: boolea
   );
 }
 
+/** 信心度徽章（对齐 stock-agent 的「信心度 中」）——只显示成员自评值，无则不渲染。 */
+export function ConfidenceBadge({ level }: { level: "high" | "medium" | "low" }) {
+  const label = { high: "高", medium: "中", low: "低" }[level];
+  return <span className={`conf-badge conf-${level}`}>信心度 {label}</span>;
+}
+
 /** 消息署名行：头像 + 名字 + 时间戳（对齐 stock-agent 的 "AI Copilot 01:31:53"）。 */
 export function MessageHeader({ name, accent, ts }: {
   name: string; accent?: boolean; ts?: string;
@@ -320,18 +327,23 @@ export function TurnList({ turns, onRate, assistantName = "助手", assistantAcc
               <div className="dfcontent">
                 <Md text={t.text} />
               </div>
-              {cites.length > 0 && (
-                <Sources>
-                  <SourcesTrigger count={cites.length}>
-                    <p className="font-medium">引用来源 {cites.length}</p>
-                    <ChevronDownIcon className="h-4 w-4" />
-                  </SourcesTrigger>
-                  <SourcesContent>
-                    {cites.map((c, i) => (
-                      <Source key={i} href={c.url} title={c.label.slice(0, 40)} />
-                    ))}
-                  </SourcesContent>
-                </Sources>
+              {(t.confidence || cites.length > 0) && (
+                <div className="msg-footer">
+                  {t.confidence && <ConfidenceBadge level={t.confidence} />}
+                  {cites.length > 0 && (
+                    <Sources>
+                      <SourcesTrigger count={cites.length}>
+                        <p className="font-medium">引用来源 {cites.length}</p>
+                        <ChevronDownIcon className="h-4 w-4" />
+                      </SourcesTrigger>
+                      <SourcesContent>
+                        {cites.map((c, i) => (
+                          <Source key={i} href={c.url} title={c.label.slice(0, 40)} />
+                        ))}
+                      </SourcesContent>
+                    </Sources>
+                  )}
+                </div>
               )}
               {/* 工具条绝对定位、不占流内高度（见上「用户消息」注释）。 */}
               <MessageToolbar className="!mt-0 absolute top-full left-0 opacity-0 group-hover/msg:opacity-100 transition-opacity z-10">

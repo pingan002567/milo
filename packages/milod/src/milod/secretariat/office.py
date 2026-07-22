@@ -352,9 +352,13 @@ class Office:
                     text = str(ev.payload.get("summary")
                                or ev.payload.get("question") or "").strip()
                     if text:
+                        payload: dict[str, Any] = {"text": text}
+                        conf = ev.payload.get("confidence")
+                        if conf:               # 成员自评信心度 → 前端徽章
+                            payload["confidence"] = conf
                         self._emit(MiloEvent(
                             group_id=ev.group_id, type=EventType.CHAT,
-                            actor=member, payload={"text": text}))
+                            actor=member, payload=payload))
                 elif ev.type == EventType.STATUS:
                     self._emit(ev)
                 elif ev.type == EventType.SYSTEM and ev.payload.get("aborted"):
