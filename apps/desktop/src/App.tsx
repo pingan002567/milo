@@ -7,7 +7,7 @@ import { OrgView } from "./components/OrgView";
 import { RosterView } from "./components/RosterView";
 import { MemberChatView } from "./components/MemberChatModal";
 import { SecretaryView } from "./components/SecretaryView";
-import { SettingsModal } from "./components/SettingsView";
+import { SettingsModal, SettingsPanel } from "./components/SettingsView";
 import {
   api, subscribe,
   type MiloEvent, type PlanStep, type TaskRow,
@@ -18,7 +18,7 @@ import {
   invalidateTeamLists, queryClient, qk,
 } from "./lib/queries";
 
-type Screen = "chat" | "todo" | "org" | "market" | "roster" | "group" | "dm";
+type Screen = "chat" | "todo" | "org" | "market" | "roster" | "group" | "dm" | "settings";
 const LAST_ORG = "milo.lastOrg";
 
 export default function App() {
@@ -219,7 +219,7 @@ export default function App() {
         <button className={`nv ${screen === "roster" ? "on" : ""}`} onClick={() => setScreen("roster")}>
           🗂 名册
         </button>
-        <button className="nv" onClick={() => setSettingsScope("team")}>
+        <button className={`nv ${screen === "settings" ? "on" : ""}`} onClick={() => setScreen("settings")}>
           ⚙️ 团队设置
         </button>
 
@@ -318,6 +318,9 @@ export default function App() {
         {screen === "market" && <MarketView onChanged={refreshLists} />}
 
         {screen === "roster" && <RosterView org={ORG} />}
+        {screen === "settings" && (
+          <SettingsPanel org={ORG} connected={conn === "open"} onOrgChanged={refreshOrgs} />
+        )}
 
         {screen === "group" && gid && (
           <GroupView org={ORG} title={title} status={gstatus} events={events} tasks={tasks}

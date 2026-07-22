@@ -446,15 +446,62 @@ const SYSTEM_TABS: Array<{ key: Tab; label: string; icon: string }> = [
   { key: "perms", label: "权限", icon: "🛡️" },
 ];
 
+/** 设置主体（左导航 + 右内容）——弹窗与中间栏内联页共用。 */
+function SettingsBody({ org, connected, scope, onOrgChanged }: {
+  org: string; connected: boolean; scope: "team" | "system"; onOrgChanged?: () => void;
+}) {
+  const tabs = scope === "team" ? TEAM_TABS : SYSTEM_TABS;
+  const [tab, setTab] = useState<Tab>(tabs[0].key);
+  useEffect(() => { setTab(tabs[0].key); }, [scope]);
+  return (
+    <div className="settings-layout">
+      <nav className="settings-nav">
+        {tabs.map((t) => (
+          <button key={t.key} type="button"
+            className={`settings-nav-item ${tab === t.key ? "active" : ""}`}
+            onClick={() => setTab(t.key)}>
+            <span aria-hidden>{t.icon}</span>{t.label}
+          </button>
+        ))}
+        <div className="settings-nav-gap" />
+        <div className="settings-nav-foot">
+          <span className={`settings-runtime-dot ${connected ? "ok" : ""}`} />
+          milod · {connected ? "已连接" : "未连接"}
+        </div>
+      </nav>
+      <div className="settings-content">
+        {tab === "team" && <TeamInfoTab org={org} onOrgChanged={onOrgChanged} />}
+        {tab === "general" && <GeneralTab />}
+        {tab === "perms" && <PermissionsTab org={org} />}
+        {tab === "ai" && <AiTab org={org} />}
+      </div>
+    </div>
+  );
+}
+
+/** 团队设置：内联在中间栏（与聊天/组织/市场等同级页面），带页头。 */
+export function SettingsPanel({ org, connected, onOrgChanged }: {
+  org: string; connected: boolean; onOrgChanged?: () => void;
+}) {
+  return (
+    <div className="settings-page">
+      <div className="gchead" data-tauri-drag-region>
+        <div>
+          <b>团队设置 · {org}</b>
+          <div className="gcsub">团队信息与 AI 配置——只作用于当前团队</div>
+        </div>
+      </div>
+      <SettingsBody org={org} connected={connected} scope="team" onOrgChanged={onOrgChanged} />
+    </div>
+  );
+}
+
+/** 系统设置：仍为弹窗（左栏底部固定入口触发）。 */
 export function SettingsModal({ org, open, connected, scope, onClose, onOrgChanged }: {
   org: string; open: boolean; connected: boolean;
   scope: "team" | "system";
   onClose: () => void; onOrgChanged?: () => void;
 }) {
-  const tabs = scope === "team" ? TEAM_TABS : SYSTEM_TABS;
-  const [tab, setTab] = useState<Tab>(tabs[0].key);
-  useEffect(() => { setTab(tabs[0].key); }, [scope]);
-
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -473,28 +520,7 @@ export function SettingsModal({ org, open, connected, scope, onClose, onOrgChang
           </button>
         </div>
         <div className="settings-modal-body">
-          <div className="settings-layout">
-            <nav className="settings-nav">
-              {tabs.map((t) => (
-                <button key={t.key} type="button"
-                  className={`settings-nav-item ${tab === t.key ? "active" : ""}`}
-                  onClick={() => setTab(t.key)}>
-                  <span aria-hidden>{t.icon}</span>{t.label}
-                </button>
-              ))}
-              <div className="settings-nav-gap" />
-              <div className="settings-nav-foot">
-                <span className={`settings-runtime-dot ${connected ? "ok" : ""}`} />
-                milod · {connected ? "已连接" : "未连接"}
-              </div>
-            </nav>
-            <div className="settings-content">
-              {tab === "team" && <TeamInfoTab org={org} onOrgChanged={onOrgChanged} />}
-              {tab === "general" && <GeneralTab />}
-              {tab === "perms" && <PermissionsTab org={org} />}
-              {tab === "ai" && <AiTab org={org} />}
-            </div>
-          </div>
+          <SettingsBody org={org} connected={connected} scope={scope} onOrgChanged={onOrgChanged} />
         </div>
       </div>
     </div>

@@ -689,3 +689,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
 .conf-badge.conf-high { background: var(--green-soft); color: var(--green); }
 .conf-badge.conf-medium { background: var(--amber-soft); color: var(--amber); }
 .conf-badge.conf-low { background: var(--crit-soft); color: var(--crit); }
+
+/* ─── 团队设置：内联在中间栏（复用 settings-layout，卡片化）─── */
+.settings-page { display: flex; flex-direction: column; max-width: 920px; }
+.settings-page > .settings-layout {
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  background: var(--panel); box-shadow: var(--shadow);
+  height: calc(100vh - 150px); min-height: 320px;
+}
