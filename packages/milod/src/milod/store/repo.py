@@ -283,6 +283,22 @@ class Store:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def task(self, task_id: str) -> dict | None:
+        row = self._conn.execute(
+            "SELECT * FROM tasks WHERE task_id=?", (task_id,)).fetchone()
+        return dict(row) if row else None
+
+    def task_activity(self, task_id: str) -> int:
+        """该任务最后一条事件的 seq —— 成员的"脉搏"。
+
+        等待任务落定不能只看墙上时钟：一个还在稳定输出 trace/report 的成员
+        是活着的，凭绝对时长腰斩它等于惩罚长任务；反过来久无事件才是真卡死。
+        """
+        row = self._conn.execute(
+            "SELECT COALESCE(MAX(seq), 0) AS s FROM events WHERE task_id=?", (task_id,)
+        ).fetchone()
+        return int(row["s"])
+
     def tasks(self, group_id: str | None = None) -> list[dict]:
         sql = "SELECT * FROM tasks"
         args: tuple = ()

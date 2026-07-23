@@ -51,6 +51,8 @@ BEGIN SELECT RAISE(ABORT, 'events is append-only'); END;
 CREATE INDEX IF NOT EXISTS idx_events_group ON events(group_id, seq);
 CREATE INDEX IF NOT EXISTS idx_events_group_cat ON events(group_id, category, seq);
 CREATE INDEX IF NOT EXISTS idx_events_run ON events(run_id, seq);
+-- 活性探测：等待任务落定时高频查"这个任务最后一条事件"，不能全表扫
+CREATE INDEX IF NOT EXISTS idx_events_task ON events(task_id, seq);
 
 -- 待批准的计划：批准前的信封暂存。落盘而非内存——milod 重启不丢
 -- （实测教训：内存暂存重启后群悬置成"僵尸待批"）

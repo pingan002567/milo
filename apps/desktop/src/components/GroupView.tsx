@@ -334,9 +334,9 @@ function FailureCard({ payload, onRetry }: {
         <div className="ff">
           <button className="btn primary sm" disabled={busy}
                   onClick={() => { setBusy(true); onRetry(); }}>
-            {busy ? "重试中…" : "重试分解"}
+            {busy ? "重试中…" : String(payload.retry_label ?? "重试分解")}
           </button>
-          <span className="muted">用原始需求重新分解；也可以在秘书对话里改写需求重新下达</span>
+          <span className="muted">用原始需求重新走一遍；也可以在秘书对话里改写需求重新下达</span>
         </div>
       )}
     </div>

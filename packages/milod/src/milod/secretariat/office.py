@@ -49,12 +49,17 @@ class Office:
         tasks = self.store.tasks(group_id)
         if not tasks:
             return
+        status = next((g["status"] for g in self.store.groups()
+                       if g["group_id"] == group_id), None)
+        if status == "failed":
+            # failed 是粘性的，只有显式重试/返工能解除。否则"最后一步超时失败"
+            # 会因为剩下的任务恰好都终态而被判成"全部完成，等你确认"——
+            # 失败卡和重试入口一起消失，用户看到的是一个假的成功。
+            return
         if any(t["state"] == "input_required" for t in tasks):
             self.store.set_group_status(group_id, "waiting")
         elif all(t["state"] in {"accepted", "rejected", "failed", "canceled"} for t in tasks):
-            cur = next((g["status"] for g in self.store.groups()
-                        if g["group_id"] == group_id), None)
-            if cur not in ("review", "archived"):
+            if status not in ("review", "archived"):
                 self.store.enter_review(group_id)
                 self._emit(MiloEvent(
                     group_id=group_id, type=EventType.SYSTEM, actor="secretariat",

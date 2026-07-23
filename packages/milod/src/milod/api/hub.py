@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+from contextlib import suppress
 from typing import Any
 
 import yaml
@@ -14,6 +16,11 @@ from milod.models import EventType, MiloEvent, TaskEnvelope, TaskState
 from milod.secretariat.decompose import DecomposeError
 from milod.secretariat.office import Office, _read_secret, short_title
 from milod.secretariat.route import NoMemberForTask
+
+#: 执行看门狗（见 Hub._await_settled）。两道闸都可用环境变量按机器/模型调整——
+#: 慢模型或依赖长外部调用的团队把静默闸调大，别让它误伤正常干活的成员。
+TASK_IDLE_SECONDS = float(os.environ.get("MILO_TASK_IDLE_SECONDS", 600))
+TASK_MAX_SECONDS = float(os.environ.get("MILO_TASK_MAX_SECONDS", 14400))
 
 
 class Hub:
@@ -281,6 +288,9 @@ class Hub:
             office.store.set_group_status(group_id, "failed")
             return
         state = await self._await_settled(office, env.task_id)
+        if state.startswith("timeout:"):
+            await self._timeout_task(office, group_id, env.task_id, state)
+            return
         if state == TaskState.DELIVERED.value:
             await office.collect(env.task_id)
         office.sync_group_status(group_id)
@@ -402,6 +412,9 @@ class Hub:
                 return
 
             state = await self._await_settled(office, env.task_id)
+            if state.startswith("timeout:"):
+                await self._timeout_task(office, group_id, env.task_id, state)
+                return  # 不再往下派：后续步骤要吃这一步的产物，空手接单必然作废
             if state == TaskState.INPUT_REQUIRED.value:
                 return  # 停在此步，等组长答复（reply → resume 后由 _after_resume 续跑）
             if state == TaskState.DELIVERED.value:
@@ -414,19 +427,73 @@ class Hub:
                 if not v.accepted:
                     return
 
-    async def _await_settled(self, office: Office, task_id: str, timeout: float = 600) -> str:
-        deadline = asyncio.get_event_loop().time() + timeout
-        while asyncio.get_event_loop().time() < deadline:
+    async def _await_settled(self, office: Office, task_id: str) -> str:
+        """等任务落定。返回终局状态，或 `timeout:idle` / `timeout:cap`。
+
+        两道闸，缺一不可：
+        - **静默闸**（默认 10 分钟）：久无新事件 = 真卡住。原实现只有绝对时长，
+          一个正常干两小时的成员会被误判，而真卡死的又只是"返回 timeout"没人管。
+        - **绝对闸**（默认 4 小时）：防成员陷入刷事件的死循环——它一直"有脉搏"，
+          静默闸永远不触发，只能靠总时长兜底。
+        """
+        loop = asyncio.get_event_loop()
+        hard_deadline = loop.time() + TASK_MAX_SECONDS
+        idle_deadline = loop.time() + TASK_IDLE_SECONDS
+        last_seq = office.store.task_activity(task_id)
+        while loop.time() < hard_deadline:
             await asyncio.sleep(0.5)
-            row = next((t for t in office.store.tasks() if t["task_id"] == task_id), None)
+            row = office.store.task(task_id)
             if row and row["state"] not in {"queued", "assigned", "working"}:
                 return row["state"]
-        return "timeout"
+            seq = office.store.task_activity(task_id)
+            if seq != last_seq:  # 有动静 = 还活着，静默闸重新计时
+                last_seq, idle_deadline = seq, loop.time() + TASK_IDLE_SECONDS
+            elif loop.time() >= idle_deadline:
+                return "timeout:idle"
+        return "timeout:cap"
+
+    async def _timeout_task(self, office: Office, group_id: str, task_id: str,
+                            reason: str) -> None:
+        """执行超时的统一收口——与分解失败同一条原则：**不留没有出口的挂起态**。
+
+        原实现里 `_await_settled` 返回 "timeout" 后无人处理：任务永远停在 working、
+        群永远 active（绿点冒充进行中），既没有终局也没有重试入口。
+        """
+        row = office.store.task(task_id)
+        member = (row or {}).get("member")
+        idle = reason == "timeout:idle"
+        mins = int((TASK_IDLE_SECONDS if idle else TASK_MAX_SECONDS) / 60)
+        if member:
+            # 先止损：成员多半还在跑（也可能卡在网络 I/O），不叫停会继续烧 token，
+            # 而且它晚到的交付会落进一个已经判失败的群里
+            with suppress(Exception):
+                await office.cancel(member, task_id)
+        office.store.set_state(task_id, TaskState.FAILED)
+        office.store.set_stop_reason(task_id, reason)
+        office._emit(MiloEvent(
+            group_id=group_id, task_id=task_id, type=EventType.SYSTEM, actor="system",
+            payload={
+                "error": (f"执行超时：{member or '成员'} 已 {mins} 分钟没有任何动静"
+                          if idle else
+                          f"执行超时：{member or '成员'} 连续运行超过 {mins} 分钟仍未交付"),
+                "retriable": True, "retry_label": "重新执行",
+                "timeout": reason,
+                "hint": ("成员可能卡在外部调用上，也可能这一步的目标太大。"
+                         if idle else
+                         "成员可能陷入了循环，或这一步的目标需要拆得更小。")
+                        + "已让它停下。可以直接重新执行，或在秘书对话里把需求拆细后重新下达；"
+                          "长上下文被污染的任务群，重开一个通常比救它更快。"}))
+        office.store.set_group_status(group_id, "failed")
 
     async def resume(self, org: str, task_id: str, answer: str) -> None:
         office = await self.office(org)
         await office.reply(task_id, answer)
+        row = office.store.task(task_id)
+        group_id = (row or {}).get("group_id") or ""
         state = await self._await_settled(office, task_id)
+        if state.startswith("timeout:"):
+            await self._timeout_task(office, group_id, task_id, state)
+            return
         if state == TaskState.DELIVERED.value:
             await office.collect(task_id)
 
