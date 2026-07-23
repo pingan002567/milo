@@ -149,6 +149,7 @@ class Hub:
         if not request:
             return False
         office.store.set_group_status(group_id, "active")
+        office.store.delete_plan_progress(group_id)  # 重来一遍，上一轮的剩余步骤作废
         task = asyncio.create_task(self._replan(office, group_id, request))
         self.track(f"{group_id}-replan", task)
         return True
@@ -274,6 +275,7 @@ class Hub:
             actor="owner", payload={"text": feedback, "rework": True,
                                     "round": target["attempts"] + 1}))
         office.store.set_group_status(group_id, "active")
+        office.store.delete_plan_progress(group_id)  # 返工是单步改稿，不接旧计划的尾巴
         task = asyncio.create_task(self._rerun(office, env, group_id))
         self.track(f"{group_id}-rework", task)
         return True
@@ -378,19 +380,23 @@ class Hub:
         await self._run_steps(office, envelopes, group_id)
         office.sync_group_status(group_id)
 
-    async def _run_steps(self, office: Office, envelopes: list, group_id: str) -> None:
+    async def _run_steps(self, office: Office, envelopes: list, group_id: str,
+                         *, prev_arts: list[dict] | None = None,
+                         carry: list[str] | None = None) -> None:
         """逐步派单并前递产物。
 
         前递 = artifact 引用授权（编制设计 §3.4）：上一步的交付物以引用形式
         写进下一步信封的 inputs.artifacts，由适配层注入成员输入目录——
         只递文件名不递文件，下游只能凭空猜（实测：评审员拿不到代码就自己
         重构一份来评审，结论全部作废）。
+
+        prev_arts/carry：答复请示后从中途续跑时，由上一步的交付重新喂进来。
         """
         from milod.models import ArtifactRef
 
-        carry: list[str] = []
-        prev_arts: list[dict] = []
-        for env in envelopes:
+        carry = list(carry or [])
+        prev_arts = list(prev_arts or [])
+        for i, env in enumerate(envelopes):
             if prev_arts:
                 env.inputs.artifacts = [
                     ArtifactRef(name=a["name"], uri=a["uri"],
@@ -409,6 +415,7 @@ class Hub:
                              "hint": f"没有成员声明能力 {e.capability}——"
                                      f"到「Agent 市场」找具备该能力的模板招募，或改写需求重试。"}))
                 office.store.set_group_status(group_id, "failed")
+                office.store.delete_plan_progress(group_id)
                 return
 
             state = await self._await_settled(office, env.task_id)
@@ -416,7 +423,10 @@ class Hub:
                 await self._timeout_task(office, group_id, env.task_id, state)
                 return  # 不再往下派：后续步骤要吃这一步的产物，空手接单必然作废
             if state == TaskState.INPUT_REQUIRED.value:
-                return  # 停在此步，等组长答复（reply → resume 后由 _after_resume 续跑）
+                # 停在此步等你答复。剩余步骤（含本步）落盘——答复可能跨天，
+                # 期间 milod 重启也不能让后面的步骤人间蒸发。
+                office.store.save_plan_progress(group_id, list(envelopes[i:]))
+                return
             if state == TaskState.DELIVERED.value:
                 v = await office.collect(env.task_id)
                 payload = office.last_delivery(env.task_id) or {}
@@ -425,7 +435,9 @@ class Hub:
                 carry.append("产物 " + "、".join(a["name"] for a in arts) if arts
                              else str(payload.get("summary") or ""))
                 if not v.accepted:
+                    office.store.delete_plan_progress(group_id)
                     return
+        office.store.delete_plan_progress(group_id)
 
     async def _await_settled(self, office: Office, task_id: str) -> str:
         """等任务落定。返回终局状态，或 `timeout:idle` / `timeout:cap`。
@@ -484,8 +496,14 @@ class Hub:
                         + "已让它停下。可以直接重新执行，或在秘书对话里把需求拆细后重新下达；"
                           "长上下文被污染的任务群，重开一个通常比救它更快。"}))
         office.store.set_group_status(group_id, "failed")
+        office.store.delete_plan_progress(group_id)
 
     async def resume(self, org: str, task_id: str, answer: str) -> None:
+        """答复请示 → 成员接续 → **续跑计划剩余步骤** → 收口群状态。
+
+        原实现到 collect 就结束：多步计划里只要有一步请示过，后面的步骤就再也
+        不会派出去，群还永远停在「等待中」——既没有后续产出，也等不到验收卡。
+        """
         office = await self.office(org)
         await office.reply(task_id, answer)
         row = office.store.task(task_id)
@@ -494,8 +512,32 @@ class Hub:
         if state.startswith("timeout:"):
             await self._timeout_task(office, group_id, task_id, state)
             return
+        accepted = True
         if state == TaskState.DELIVERED.value:
-            await office.collect(task_id)
+            accepted = (await office.collect(task_id)).accepted
+        if state == TaskState.INPUT_REQUIRED.value:
+            return  # 又请示了：继续等下一次答复，剩余步骤仍在 plan_progress 里
+        if group_id and accepted:
+            await self._continue_plan(office, group_id, task_id)
+        if group_id:
+            office.sync_group_status(group_id)
+
+    async def _continue_plan(self, office: Office, group_id: str, done_task: str) -> None:
+        """答复后续跑：把已完成的这一步从剩余计划里划掉，接着派下一步。"""
+        remaining = office.store.plan_progress(group_id)
+        if not remaining:
+            return
+        idx = next((i for i, e in enumerate(remaining) if e.task_id == done_task), None)
+        rest = remaining[idx + 1:] if idx is not None else []
+        if not rest:
+            office.store.delete_plan_progress(group_id)
+            return
+        # 产物前递照旧：这一步的交付是下一步的输入，中途续跑也不能断
+        payload = office.last_delivery(done_task) or {}
+        arts = [a for a in (payload.get("artifacts") or []) if a.get("uri")]
+        carry = ["产物 " + "、".join(a["name"] for a in arts) if arts
+                 else str(payload.get("summary") or "")]
+        await self._run_steps(office, rest, group_id, prev_arts=arts, carry=carry)
 
 
 async def _ask_llm(*, org: str, prompt: str) -> str:

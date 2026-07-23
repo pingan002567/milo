@@ -48,6 +48,16 @@ class FakeOffice:
         self.store.append(ev)
 
 
+class _Verdict:
+    accepted = True
+    summary = "通过"
+
+
+async def _accepted(store: Store, task_id: str) -> _Verdict:
+    store.set_state(task_id, TaskState.ACCEPTED)
+    return _Verdict()
+
+
 def new_office(tmp: Path) -> FakeOffice:
     store = Store(tmp / "milo.db")
     store.ensure_group("g-1", title="测试群")
@@ -153,6 +163,46 @@ async def main() -> None:
     check("只派了第一步（第二步不空手接单）", dispatched == ["t-a"])
     check("第一步 failed", store.task("t-a")["state"] == "failed")
     check("群 failed（有出口）", grp["status"] == "failed")
+
+    # --- 场景 G：请示停步 → 剩余步骤落盘 → 答复后续跑 ------------------
+    # 原缺陷：resume 到 collect 就结束——多步计划只要有一步请示过，后面的步骤
+    # 再也不会派出去，群还永远停在「等待中」，既无产出也等不到验收卡。
+    print("\n【G · 请示停步 → 答复后续跑剩余步骤】")
+    hubmod.TASK_IDLE_SECONDS = 30
+    store = Store(tmp / "g" / "milo.db")
+    store.ensure_group("g-3", title="两步计划")
+    office = FakeOffice(store)
+    dispatched: list[str] = []
+
+    async def dispatch_esc(envs, group_id):    # noqa: ANN001
+        """第一步请示、第二步直接交付。"""
+        for e in envs:
+            dispatched.append(e.task_id)
+            store.upsert_task(e, group_id=group_id, member="小张",
+                              state=TaskState.WORKING)
+            store.set_state(e.task_id, TaskState.INPUT_REQUIRED
+                            if e.task_id == "t-a" else TaskState.DELIVERED)
+
+    office.dispatch = dispatch_esc             # type: ignore[attr-defined]
+    office.sync_group_status = lambda gid: None  # type: ignore[attr-defined]
+    office.collect = lambda tid: _accepted(store, tid)  # type: ignore[attr-defined]
+    office.last_delivery = lambda tid: {"artifacts": [], "summary": "做完了"}  # type: ignore[attr-defined]
+
+    plan = [_envelope("t-a", "g-3"), _envelope("t-b", "g-3")]
+    await hub._run_steps(office, plan, "g-3")
+    saved = store.plan_progress("g-3")
+    check("停在第一步，只派了它", dispatched == ["t-a"])
+    check("剩余步骤已落盘（含当前步）",
+          bool(saved) and [e.task_id for e in saved] == ["t-a", "t-b"])
+
+    # 答复：模拟 office.reply 让任务接续到交付，再走 hub 的续跑
+    async def reply(tid, answer):              # noqa: ANN001
+        store.set_state(tid, TaskState.DELIVERED)
+
+    office.reply = reply                       # type: ignore[attr-defined]
+    await hub._continue_plan(office, "g-3", "t-a")
+    check("第二步被派出去了", dispatched == ["t-a", "t-b"])
+    check("计划跑完后剩余记录已清", store.plan_progress("g-3") is None)
 
     print("\n" + ("全部通过" if ok else "有失败用例"))
     sys.exit(0 if ok else 1)

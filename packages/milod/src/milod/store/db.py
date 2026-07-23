@@ -62,6 +62,14 @@ CREATE TABLE IF NOT EXISTS pending_plans (
     created_at TEXT NOT NULL
 );
 
+-- 执行中计划的剩余步骤：停在请示那一步时落盘（含当前步），答复后据此续跑。
+-- 也落盘而非内存：等你答复可能跨天，中间 milod 重启不该让后续步骤人间蒸发
+CREATE TABLE IF NOT EXISTS plan_progress (
+    group_id   TEXT PRIMARY KEY,
+    envelopes  TEXT NOT NULL,               -- 剩余 TaskEnvelope JSON 数组（[0] = 当前步）
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
     task_id     TEXT PRIMARY KEY,
     group_id    TEXT NOT NULL,
