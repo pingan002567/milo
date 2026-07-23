@@ -180,6 +180,16 @@ export const api = {
       body: JSON.stringify({ text }),
     }).then(j) as Promise<{ status: string }>,
 
+  secretaryPersona: (org: string) =>
+    fetch(`/api/orgs/${org}/secretary/persona`).then(j) as
+      Promise<{ baseline: string; instructions: string; customized: boolean }>,
+
+  saveSecretaryPersona: (org: string, instructions: string, resetConversation = false) =>
+    fetch(`/api/orgs/${org}/secretary/persona`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ instructions, reset_conversation: resetConversation }),
+    }).then(j) as Promise<{ saved: boolean; restarted: boolean; reset: boolean; note: string }>,
+
   library: (): Promise<{ library: LibraryItem[] }> => fetch(`/api/library`).then(j),
 
   download: (sourcePath: string) =>

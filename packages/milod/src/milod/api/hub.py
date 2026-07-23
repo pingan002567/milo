@@ -52,6 +52,22 @@ class Hub:
             self._desks[org] = desk
         return self._desks[org]
 
+    async def restart_secretary(self, org: str) -> bool:
+        """重启秘书实例——改完人设让它生效的唯一办法。
+
+        harness 把 agent（含 SOUL 渲染出的系统提示）缓存在 worker 进程里，
+        `_ensure_agent` 只在 model/plan_mode/skills 变化时重建；秘书只有一个
+        通道且 plan_mode 恒 False，所以不换进程就永远读不到新人设。
+
+        对话不受影响：checkpointer 在磁盘上、thread_id 确定性生成，重启后
+        下一条消息照常接上（adapter.chat 首条走 assign 复用同一 thread）。
+        """
+        desk = self._desks.pop(org, None)
+        if desk is None:
+            return False
+        await desk.close()
+        return True
+
     # ---- 组织 ----------------------------------------------------------
     async def office(self, org: str) -> Office:
         async with self._lock:

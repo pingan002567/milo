@@ -615,6 +615,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--pine); outl
   border-radius: 8px; padding: 5px 10px; font-size: 12px; cursor: pointer;
   transition: color .15s, border-color .15s; }
 .chat-reset:hover { color: var(--crit); border-color: var(--crit-soft); }
+/* 调教（非破坏性动作）：用主色而非危险色区分于「重置」 */
+.chat-reset.tune:hover { color: var(--pine); border-color: var(--pine-soft); }
 
 /* 空态 */
 .chat-empty { max-width: 640px; padding: 20px 22px; border: 1px solid var(--line);

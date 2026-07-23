@@ -342,6 +342,49 @@ class SecretaryChatRequest(BaseModel):
     text: str
 
 
+class SecretaryPersonaRequest(BaseModel):
+    instructions: str = ""
+    reset_conversation: bool = False
+
+
+@app.get("/api/orgs/{org}/secretary/persona")
+async def get_secretary_persona(org: str) -> dict[str, Any]:
+    """秘书人设：出厂基线（只读）+ 你的指示（可改）。"""
+    from milod.secretary import persona
+
+    return persona.read(org)
+
+
+@app.put("/api/orgs/{org}/secretary/persona")
+async def put_secretary_persona(org: str, body: SecretaryPersonaRequest) -> dict[str, Any]:
+    """改秘书人设 → 重启秘书实例使其生效（对话记忆保留）。
+
+    秘书是**可塑不可换**的：人设归你，工具面与权限由系统固定。
+    写入只经此接口——秘书自己没有改人设的工具（它要读市场描述、成员汇报等
+    不可信数据，自写人设会开出「注入→持久污染控制面」的路径）。
+
+    reset_conversation：连同清空对话历史。**实测强烈建议开**——新人设进的是
+    系统提示，但模型会照着自己前几轮的输出继续（历史的示例效应盖过系统提示）：
+    改完不清历史时它仍按旧口径回答，清空后新人设立刻生效。
+    """
+    from milod.secretary import persona
+
+    reset = False
+    if body.reset_conversation:
+        # 先清历史（要用运行中的实例），再改人设、再重启——顺序不能反
+        reset = await hub.reset_conversation(org)
+    persona.write(org, body.instructions)
+    restarted = await hub.restart_secretary(org)
+    if reset:
+        note = "已保存并清空对话。秘书按新人设重新上岗。"
+    elif restarted:
+        note = ("已保存，秘书按新人设重新上岗。注意：当前对话里它可能仍延续旧口径"
+                "（模型会照着前几轮的输出走）——需要立竿见影就点「重置」开新对话。")
+    else:
+        note = "已保存，秘书下次启动即按新人设工作。"
+    return {"saved": True, "restarted": restarted, "reset": reset, "note": note}
+
+
 @app.post("/api/orgs/{org}/secretary/chat")
 async def secretary_chat(org: str, body: SecretaryChatRequest) -> dict[str, Any]:
     """给秘书发消息。回复经 WS 推送（group_id=secretary），历史走群接口。"""

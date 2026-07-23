@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowUp, Check, Paperclip, RotateCcw, Square, Wrench } from "lucide-react";
 import type { MiloEvent } from "../lib/api";
 import {
@@ -401,10 +401,11 @@ function avatarHue(name: string): number {
 }
 
 /** 会话头部：头像 + 标题/副标题 + 重置。私聊与秘书共用。 */
-export function ChatHeader({ name, title, subtitle, accent, onReset }: {
+export function ChatHeader({ name, title, subtitle, accent, onReset, extra }: {
   name: string; title: string; subtitle: string;
   accent?: boolean;  // 秘书用主色实心头像，成员用名字色相
   onReset: () => void;
+  extra?: ReactNode;  // 页面特有的头部动作（秘书页的「调教」）
 }) {
   const style = accent
     ? undefined
@@ -418,6 +419,7 @@ export function ChatHeader({ name, title, subtitle, accent, onReset }: {
         <div className="chat-title">{title}</div>
         <div className="chat-sub">{subtitle}</div>
       </div>
+      {extra}
       <button className="chat-reset" title="重置对话（清空历史，人设不变）" onClick={onReset}>
         <RotateCcw size={14} /> 重置
       </button>

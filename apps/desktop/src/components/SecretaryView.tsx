@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import { api, type MiloEvent } from "../lib/api";
 import {
   buildTurns, ChatComposer, ChatHeader, OfficialConversation, Suggestions, TurnList,
 } from "./Conversation";
+import { SecretaryPersonaModal } from "./SecretaryPersonaModal";
 
 /**
  * 秘书对话页——会话形态对齐 DeerFlow 官方前端（与成员私聊共用 Conversation 组件）。
@@ -13,6 +15,7 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [tuning, setTuning] = useState(false);
 
   useEffect(() => {
     setHistory([]);
@@ -61,6 +64,12 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
         name="秘书" accent
         title="秘书"
         subtitle="你的系统操作面：问团队、看进展、派活，都在这里说"
+        extra={
+          <button className="chat-reset tune" title="调教秘书：改它的人设（工具与权限由系统固定）"
+                  onClick={() => setTuning(true)}>
+            <SlidersHorizontal size={14} /> 调教
+          </button>
+        }
         onReset={async () => {
           if (!window.confirm("清空这个对话的历史？成员的人设与档案不受影响。")) return;
           await api.resetConversation(org).catch(() => {});
@@ -87,6 +96,9 @@ export function SecretaryView({ org, liveEvents }: { org: string; liveEvents: Mi
         streaming={streaming} sending={sending}
         placeholder="跟秘书说点什么…（Enter 发送，Shift+Enter 换行）"
         files={files} onFiles={setFiles} />
+
+      {tuning && <SecretaryPersonaModal org={org} onClose={() => setTuning(false)}
+                                        onReset={() => setHistory([])} />}
     </div>
   );
 }
