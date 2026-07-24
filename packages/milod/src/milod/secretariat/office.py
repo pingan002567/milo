@@ -34,11 +34,19 @@ class Office:
         self._runs: dict[str, str] = {}          # task_id -> 当前 run_id
         self._on_event = on_event  # UI/CLI 回调
 
-    def start_group(self, group_id: str, request: str) -> None:
-        """开群：落标题 + 记录组长的原始需求（CLI 与 API 共用，避免两处逻辑漂移）。"""
+    def start_group(self, group_id: str, request: str, *, context: str = "") -> None:
+        """开群：落标题 + 记录组长的原始需求（CLI 与 API 共用，避免两处逻辑漂移）。
+
+        context（P0-1）：秘书与负责人对话中澄清出的约束/背景，随需求一起存进
+        owner chat 事件的 metadata——分解时喂给模型，重试时也能一并捞回
+        （text 进 content 作可见气泡，context 进 metadata 不污染气泡文本）。
+        """
         self.store.ensure_group(group_id, title=short_title(request))
+        payload: dict[str, Any] = {"text": request}
+        if context.strip():
+            payload["context"] = context.strip()
         self._emit(MiloEvent(
-            group_id=group_id, type=EventType.CHAT, actor="owner", payload={"text": request}))
+            group_id=group_id, type=EventType.CHAT, actor="owner", payload=payload))
 
     def sync_group_status(self, group_id: str) -> None:
         """按任务终局收口群状态：有待决→waiting，全终态→**review（待你确认）**。
@@ -242,8 +250,8 @@ class Office:
     def roster(self) -> Roster:
         return Roster([(n, list(s.capabilities)) for n, s in self._specs.items()])
 
-    def plan_prompt(self, request: str) -> str:
-        return build_prompt(request, self.roster())
+    def plan_prompt(self, request: str, *, context: str = "") -> str:
+        return build_prompt(request, self.roster(), context=context)
 
     def parse_plan(self, text: str, group_id: str) -> list[TaskEnvelope]:
         return parse_plan(text, self.roster(), group_id=group_id)

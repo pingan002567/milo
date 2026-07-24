@@ -110,16 +110,18 @@ class Hub:
         task.add_done_callback(lambda _t: self._tasks.pop(group_id, None))
 
     # ---- 执行 ----------------------------------------------------------
-    async def execute(self, org: str, group_id: str, request: str, auto_approve: bool) -> None:
+    async def execute(self, org: str, group_id: str, request: str, auto_approve: bool,
+                      *, context: str = "") -> None:
         """后台执行一次需求：分解 → （批准）→ 逐步派单 → 前递产物 → 验收。
 
         遇升级即停在该步（任务转 input_required），等 UI 端提交答复后 resume。
+        context（P0-1）：秘书在对话里澄清出的约束/背景，随需求存盘并喂给分解。
         """
         office = await self.office(org)
-        office.start_group(group_id, request)  # 落标题 + 记录组长需求（与 CLI 共用）
+        office.start_group(group_id, request, context=context)  # 落标题 + 需求 + 上下文
 
         try:
-            envelopes = await self._decompose(office, request, group_id)
+            envelopes = await self._decompose(office, request, group_id, context=context)
         except Exception as e:  # noqa: BLE001
             self._fail_group(office, group_id, request, e)
             return
@@ -141,11 +143,12 @@ class Hub:
         await self._run_steps(office, envelopes, group_id)
         office.sync_group_status(group_id)
 
-    async def _decompose(self, office: Office, request: str, group_id: str) -> list:
+    async def _decompose(self, office: Office, request: str, group_id: str,
+                         *, context: str = "") -> list:
         """分解需求。失败时把错误回喂模型重试一次——LLM 看到"X 不是能力、
         可选能力是 …"通常一次就能改对（实测常见错误：把成员名当能力 ID）。
         """
-        prompt = office.plan_prompt(request)
+        prompt = office.plan_prompt(request, context=context)
         try:
             return office.parse_plan(await _ask_llm(org=office.org, prompt=prompt), group_id)
         except DecomposeError as first:
@@ -160,13 +163,15 @@ class Hub:
         """重试分解（P0 死锁出口）：用原始需求或用户改写后的需求重新走一遍。"""
         office = await self.office(org)
         events = office.store.group_events(group_id)
-        request = next((e["content"] for e in events
-                        if e["type"] == "chat" and e["actor"] == "owner" and e["content"]), None)
-        if not request:
+        origin = next((e for e in events
+                       if e["type"] == "chat" and e["actor"] == "owner" and e["content"]), None)
+        if not origin:
             return False
+        request = origin["content"]
+        context = str((origin.get("payload") or {}).get("context") or "")  # P0-1：一并捞回
         office.store.set_group_status(group_id, "active")
         office.store.delete_plan_progress(group_id)  # 重来一遍，上一轮的剩余步骤作废
-        task = asyncio.create_task(self._replan(office, group_id, request))
+        task = asyncio.create_task(self._replan(office, group_id, request, context=context))
         self.track(f"{group_id}-replan", task)
         return True
 
@@ -186,9 +191,10 @@ class Hub:
                                "或改写需求后重试分解。"}))
         office.store.set_group_status(group_id, "failed")
 
-    async def _replan(self, office: Office, group_id: str, request: str) -> None:
+    async def _replan(self, office: Office, group_id: str, request: str,
+                      *, context: str = "") -> None:
         try:
-            envelopes = await self._decompose(office, request, group_id)
+            envelopes = await self._decompose(office, request, group_id, context=context)
         except Exception as e:  # noqa: BLE001
             self._fail_group(office, group_id, request, e)
             return

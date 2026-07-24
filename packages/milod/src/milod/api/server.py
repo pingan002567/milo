@@ -29,6 +29,7 @@ hub = Hub()
 class RunRequest(BaseModel):
     request: str
     auto_approve: bool = False
+    context: str = ""   # P0-1：秘书在对话里澄清出的约束/背景，喂给分解
 
 
 class ReplyRequest(BaseModel):
@@ -1073,7 +1074,8 @@ async def create_run(org: str, body: RunRequest) -> dict[str, Any]:
     """下达需求：立即返回 group_id，执行在后台，进度经 WS 推送。"""
     office = await hub.office(org)
     group_id = f"g-{uuid.uuid4().hex[:6]}"
-    task = asyncio.create_task(hub.execute(org, group_id, body.request, body.auto_approve))
+    task = asyncio.create_task(
+        hub.execute(org, group_id, body.request, body.auto_approve, context=body.context))
     hub.track(group_id, task)
     return {"group_id": group_id, "status": "started"}
 

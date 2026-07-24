@@ -21,7 +21,7 @@ PLAN_PROMPT = """你是一个组织的秘书，负责把组长的一句话需求
 {roster}
 
 组长的需求：{request}
-
+{context}
 请输出 JSON（不要任何解释文字），格式：
 {{"steps": [
   {{"capability": "必须从上面能力列表中选择",
@@ -61,10 +61,15 @@ def _extract_json(text: str) -> dict[str, Any]:
     return json.loads(m.group(0))
 
 
-def build_prompt(request: str, roster: Roster, max_steps: int = 3) -> str:
+def build_prompt(request: str, roster: Roster, max_steps: int = 3,
+                 *, context: str = "") -> str:
     caps = "\n".join(f"- {c}" for c in sorted(roster.capabilities)) or "（暂无可用能力）"
+    # context 与 request 分列（不拼进 request）：让模型分清"要办的事"与"边界/背景"，
+    # 避免约束被当成目标复述。来自秘书与负责人的对话澄清（P0-1）。
+    ctx_block = (f"\n补充上下文（来自与负责人的对话，请据此确定目标与约束，"
+                 f"但不要照抄进 objective）：\n{context.strip()}\n") if context.strip() else ""
     return PLAN_PROMPT.format(caps=caps, roster=roster.render(),
-                              request=request, max_steps=max_steps)
+                              request=request, context=ctx_block, max_steps=max_steps)
 
 
 def parse_plan(text: str, roster: Roster, *, group_id: str | None = None) -> list[TaskEnvelope]:

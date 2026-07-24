@@ -130,16 +130,21 @@ def list_agent_library_tool() -> str:
 
 # ---- L1 低危写（直接执行 + 留痕）------------------------------------------
 @tool("create_task_group", parse_docstring=True)
-def create_task_group_tool(request: str) -> str:
+def create_task_group_tool(request: str, context: str = "") -> str:
     """把用户要办的事派下去：创建任务群。系统会先分解出计划等用户批准，再派给成员执行。
 
     Args:
-        request: 用用户的原话或忠实转述描述要办的事，含可验收的目标；不要自行分解步骤。
+        request: 要办的事的主目标，一句话说清、含可验收的产出；不要自行分解步骤。
+        context: 你和用户在这轮对话里澄清出的、但没写进 request 的约束与背景——
+            比如具体要求（键用第一列、UTF-8、别用某某库）、产出文件名、用户偏好、
+            已提到的相关产物或前提。把它们如实写这里，分解时会一并参考。
+            没有额外信息就留空。
 
     Returns:
         JSON：group_id（告诉用户凭此进任务群批准计划）。
     """
-    r = _post(f"/api/orgs/{_org()}/runs", {"request": request, "auto_approve": False})
+    r = _post(f"/api/orgs/{_org()}/runs",
+              {"request": request, "context": context, "auto_approve": False})
     return _j({"group_id": r.get("group_id"),
                "note": "已创建任务群；系统正在分解计划，用户需在任务群里批准后才会执行"})
 
