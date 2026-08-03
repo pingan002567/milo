@@ -45,7 +45,7 @@ class Delivery(BaseModel):
 
 
 class MemberAdapter(ABC):
-    """合同六动作。实现：EmbeddedAdapter（进程内，首发）/ ContainerAdapter（延后）。"""
+    """合同六动作。实现：SubprocessAdapter（主）/ EmbeddedAdapter（开发兜底）。不做云端容器面。"""
 
     @abstractmethod
     async def enroll(self, spec: MemberSpec) -> None:

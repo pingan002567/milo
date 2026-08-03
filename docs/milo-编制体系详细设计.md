@@ -12,7 +12,7 @@
 **来自 DeerFlow 2.0 源码核实：**
 - 外部编排器驱动单实例的路径**完全闭环**：HTTP Gateway 提供 threads/runs/stream（SSE + Last-Event-ID 断点续传）、webhook 完成回调、`GET /api/threads/{id}/artifacts/{path}` 产物下载、`POST /api/agents` 人设 CRUD、`PUT /api/skills/custom/{name}` 技能安装。
 - DeerFlow 已内置**实例内静态编制**：per-user agents 目录（`SOUL.md` 人设 + config.yaml）和 `subagents.custom_agents`（等价 Claude Code 的 `.claude/agents`）。**Milo 不重复发明这两层，MiloPack 直接映射到它们**；Milo 只发明 DeerFlow 没有的：实例间组织与路由。
-- `DeerFlowClient` 是**进程内嵌入式客户端**（非 HTTP SDK）→ 成员有两种宿主形态：容器成员（生产）与进程内成员（本地/MVP）。
+- `DeerFlowClient` 是**进程内嵌入式客户端**（非 HTTP SDK）→ MVP/产品路径为**每成员一子进程**；**不做**容器/K8s 云端执行面（见产品方案「明确不做」）。
 - Redis stream bridge 是 Gateway 内部的 SSE 扇出通道（无版本化 schema），**不作为对外集成面**；事件一律走 SSE。
 - DeerFlow 单实例多副本尚不完整（issue #3948/#4189）——Milo 每成员一实例，不受影响。
 
@@ -62,8 +62,8 @@
   metadata: {name: my-team}
   spec:
     members:
-      - {name: lit-scout, pack: registry.milo.dev/lit-scout@2.1.0}
-      - {name: writer,    pack: registry.milo.dev/cn-writer@3.0.0}
+      - {name: lit-scout, pack: ~/.milo/packs/lit-scout@2.1.0}
+      - {name: writer,    pack: ~/.milo/packs/cn-writer@3.0.0}
     limits: {maxParallelMembers: 5}
   ```
 
@@ -98,7 +98,7 @@ YAML 1.2 严格模式（规避 `on:`→true 的 1.1 陷阱）；文件中禁止�
 ```yaml
 members:
   - name: market-researcher
-    pack: registry.milo.dev/market-researcher@sha256:ab12…   # MiloPack 引用，强制 pin（tag 或 digest）
+    pack: ~/.milo/packs/market-researcher@2.4.0   # 本机包源引用，强制 pin 版本（无公开 Registry）
     runtime:
       mode: container                # container | embedded（进程内 DeerFlowClient，本地模式）
       replicas: 1                    # 同岗多实例工位池（扇出场景，如 3 篇文章并行写）；副本共担同一能力声明
@@ -107,7 +107,7 @@ members:
         basic: doubao-pro
       sandbox: aio                   # 透传 DeerFlow sandbox provider 选择：local|aio|k8s|boxlite|e2b
   - name: financial-analyst
-    pack: ./packs/financial-analyst  # 本地路径（开发态）；发布组织模板时必须解析为 registry pin
+    pack: ./packs/financial-analyst        # 本地路径（开发态）；组织模板分发必须解析为 ~/.milo/packs 引用
 ```
 
 - 成员的 persona/skills/capabilities/permissions/evals 全部来自 MiloPack，org.yaml 只做**引用与绑定**，不内联 prompt（长文本留在包内的 Markdown，Claude Code 教训）。
@@ -118,7 +118,7 @@ members:
 ```yaml
 departments:
   - name: legal
-    uses: registry.milo.dev/teams/legal-review@1.2.0   # 成建制引用，强制 pin
+    uses: ~/.milo/team-packs/legal-review@1.2.0   # 成建制引用（本机精品货架），强制 pin 版本
     inputs:                                            # GHA reusable workflow 式类型化接口
       - {name: contract_files, type: artifact, required: true}
     outputs:
@@ -281,41 +281,41 @@ queued → assigned → working ⇄ input-required(escalate) → delivered → a
 
 ### 3.3 六动作 → DeerFlow 2.0 落点
 
-| 动作 | 容器成员（HTTP Gateway） | 进程内成员（DeerFlowClient） |
+| 动作 | 子进程成员（SubprocessAdapter，主路径） | 同进程成员（EmbeddedAdapter，开发兜底） |
 |---|---|---|
-| `enroll` | 起容器 → 由 MiloPack 渲染实例 `config.yaml`（models / subagents.custom_agents / skills 白名单 / sandbox）→ `POST /api/agents` 写入 persona（**MiloPack persona → SOUL.md + AgentConfig**）→ `PUT /api/skills/custom/{name}` 装技能 → `/api/mcp/config` 配 MCP | `DeerFlowClient(config_path, agent_name=…)` + `install_skill()` |
-| `assign` | `POST /api/threads` → `PUT …/goal`（任务信封的 objective）→ `POST …/runs/stream`（`assistant_id` 选 persona、`config.configurable.model_name` 按 model_bindings、`webhook` 回调、`multitask_strategy: reject`） | `client.stream()` |
-| `status` | SSE 消费（values/messages/custom），断线 `GET …/runs/{run_id}/stream` + Last-Event-ID 续传；三槽位汇报由 MemberAdapter 从事件流归一化 | stream 迭代器 |
-| `escalate` | 实例内澄清/中断类事件 + run 终止原因（如 `subagent_stop_reason=token_capped`）→ 归一化为 `input-required`；**事件形态是 spike 首要验证项** | 同左 |
-| `deliver` | `webhook` 完成回调 → `GET …/runs/{run_id}/workspace-changes` 取变更清单 → `GET /api/threads/{id}/artifacts/mnt/user-data/outputs/…` 下载 → 校验 output_spec | `get_artifact()` |
-| `dismiss` | 归档 thread（`PATCH/DELETE /api/threads/{id}`）→ 销毁容器 | 释放实例 |
+| `enroll` | 渲染成员工作区（config / SOUL.md / skills）→ 拉起子进程 worker → `DeerFlowClient` + 装技能 | 同进程构造 `DeerFlowClient`（弱隔离） |
+| `assign` | JSON-RPC 下发信封 → 子进程内 `stream()` | `client.stream()` |
+| `status` | 子进程事件流归一化为三槽位 / 进度 | stream 迭代器 |
+| `escalate` | `ask_clarification` / 契约标记 → `input-required` | 同左 |
+| `deliver` | `get_artifact` + output_spec 校验 → 组织级 artifacts 目录 | 同左 |
+| `dismiss` | 终止子进程 + 归档/清理成员工作区 | 释放 client |
 
-- **适配层只依赖上表列出的公开端点**；Redis stream bridge 不作为集成面（内部约定、无版本化 schema），最多作只读监控旁路。
-- MiloPack 中若含 worker 定义（包作者预设的实例内分工），映射到 `subagents.custom_agents` 段——**由 DeerFlow 自己消费，Milo 写入后不再感知**。
+- **不做** HTTP Gateway 容器成员 / webhook / Redis stream 集成面 / K8s 执行面。
+- MiloPack 中 worker 定义映射到 `subagents.custom_agents`——由 DeerFlow 消费，Milo 写入后不再感知。
 
 ---
 
 ### 3.4 数据隔离模型
 
-**默认全隔离 + 唯一受控共享通道。** 市场分发的第三方成员不可信，隔离是防横向移动的安全刚需，也是并行正确性（Cognition 冲突假设教训）与上下文质量（Manus/Anthropic 干净上下文经验）的保障。
+**默认全隔离 + 唯一受控共享通道。** 第三方包不可信；隔离防横向移动，并保障并行正确性与上下文质量。执行面固定为本机子进程（**不做云端容器面**）。
 
 **六层隔离（默认态，成员互不可见）：**
 
 | 层 | 设计 | 实现 |
 |---|---|---|
-| 计算 | 每成员一实例一容器 | 容器 / K8s 沙箱（官方 5 种 provider） |
-| 文件系统 | 独立工作区（/mnt/user-data）、独立 skills/memory，互不可见 | 容器卷，无共享挂载 |
-| 上下文 | 对话历史/中间过程只在本实例；群消息流成员不消费 | 实例边界 + hub-and-spoke |
-| 数据库 | 实例自带库各自独立；Milo 控制面库只存组织级数据（任务/群记录/审计） | 实例私有存储 |
-| 网络 | 每成员出网白名单按其 MiloPack permissions.network 单独收敛 | 容器 egress 白名单 |
-| 密钥 | 渲染 deerflow-config.yaml 时按成员最小注入（自己档位的模型密钥 + 自己声明的 MCP 凭证） | bindings 渲染器 + 钥匙串引用 |
+| 计算 | 每成员一实例一子进程 | SubprocessAdapter + 独立崩溃域 |
+| 文件系统 | 独立工作区、skills/memory，互不可见 | `orgs/<org>/members/<name>/` 目录隔离 |
+| 上下文 | 对话历史只在本实例；群消息流成员不消费 | 实例边界 + hub-and-spoke |
+| 数据库 | 实例 checkpoint 各自独立；控制面库只存组织级数据 | 每成员 SQLite + milod 库 |
+| 网络 | 出网按 permissions 收敛（工具白名单不装即不可用） | 渲染时不注入高危工具 |
+| 密钥 | 按成员最小注入模型/MCP 凭证 | bindings + 钥匙串；不落盘 |
 
-**唯一共享通道 = artifact 引用授权（不是共享盘）**：成员交付 artifact → 组织级对象存储 → 秘书长按任务依赖把引用写进下游任务信封 → 下游只能读信封列出的引用。按需授权、流向全审计、不做隐式共享（v0 无共享内存/向量库；组织知识库 v1+ 作为显式资源按权限挂载）。
+**唯一共享通道 = artifact 引用授权**：成员交付 → 组织级本地 artifacts → 秘书按依赖写入下游信封。不做隐式共享盘。
 
 **边界情况：**
-- embedded（进程内）成员 = 弱隔离模式，仅限本地个人场景；lint：embedded + python_repl / 开放外网 → 强制警告建议转容器。
-- dismiss 的数据归属："工作成果归组织，工作过程归实例"——artifact 留组织存储（离职交接），实例对话历史/工作区随容器销毁（或按审计要求归档后销毁）。
-- 可见性单向不对称：组长可见一切；成员只见自己的信封与被授权引用。监督自上而下，数据不横向流动。
+- EmbeddedAdapter = 弱隔离，仅开发/单成员；lint：高危组合警告。
+- dismiss：artifact 留组织；实例过程数据随工作区清理或按审计归档。
+- 可见性单向：用户/秘书可见调度态；成员只见自己的信封与被授权引用。
 
 ### 3.5 信息交流设计
 
@@ -410,7 +410,7 @@ status:
 ├── settings/                      # ① 应用层（跨组织全局）
 │   ├── app.yaml                   #    通知偏好 / 主题 / 语言 / 遥测开关 / 快捷键
 │   ├── providers.yaml             #    模型供应商与档位标注（basic/reasoning/vision/code；密钥→钥匙串引用名）
-│   └── registries.yaml            #    Registry 源（官方 / 私有 / 镜像）+ 发布者身份（token 走钥匙串）
+│   └── packs.yaml                  #    本机包源目录列表（默认 ~/.milo/packs；不做公开 Registry）
 └── orgs/<org>/                    # ② 组织层（每组织一目录）
     ├── org.yaml                   #    编制：用户可写的唯一组织事实源（可移植）
     ├── bindings.yaml              #    环境绑定：model_bindings 默认 / sandbox / secretariat.model（不可移植）
@@ -433,7 +433,7 @@ status:
 
 ### 6.3 MVP 裁剪
 
-v0 仅需五个文件（app / providers / registries / org / bindings）+ 钥匙串；MCP 凭证管理推至 v1（随自定义路由），私有 Registry 与团队版密钥后端推至 v2。所有用户可写文件带 apiVersion，沿 §2.9 的毕业制与导入兼容分级演进。
+v0 仅需五个文件（app / providers / packs / org / bindings）+ 钥匙串；MCP 凭证管理推至 v1（随自定义路由），团队版密钥后端推至 v2（公开 Registry 已明确不做）。所有用户可写文件带 apiVersion，沿 §2.9 的毕业制与导入兼容分级演进。
 
 ## 7. 风险与 spike 清单（更新）
 

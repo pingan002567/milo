@@ -9,7 +9,7 @@ def milo_home() -> Path:
     return Path(os.environ.get("MILO_HOME", Path.home() / ".milo"))
 
 
-def settings_dir() -> Path:          # 应用层：app.yaml / providers.yaml / registries.yaml
+def settings_dir() -> Path:          # 应用层：app.yaml / providers.yaml / packs.yaml
     return milo_home() / "settings"
 
 

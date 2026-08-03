@@ -32,7 +32,7 @@ export function MarketView({ onChanged }: { onChanged: () => void }) {
   const reload = () => api.market().then((r) => setPacks(r.packs)).catch(() => setPacks([]));
   useEffect(() => { reload(); }, []);
 
-  // 市场只做"发现+验货"（§3.5）：下载入库 / 收藏记引用，招募在「团队」页
+  // 本地精品货架：发现+验货（非流量商店）。入库/收藏；招募在「团队」页
   const download = async (p: PackInfo) => {
     setBusy(p.path); setMsg(null);
     try {

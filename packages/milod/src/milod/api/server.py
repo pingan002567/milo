@@ -649,9 +649,10 @@ def _refs_in_use() -> dict[str, list[str]]:
 
 @app.get("/api/market")
 async def market() -> dict[str, Any]:
-    """Agent 市场 v0：扫描本地源目录（Registry 服务端推迟到 M4）。
+    """Agent 市场（本地精品货架）：扫描本地包源目录（MILO_PACKS / ~/.milo/packs）。
 
-    职责收窄为"发现 + 验货"（§3.5）：卡片动作只有 收藏/下载，不直接产生雇佣。
+    职责收窄为"发现 + 验货"（§3.5）：卡片动作只有 收藏/入库，不直接产生雇佣。
+    明确不做：公开 Registry / 远端拉取（见产品方案「明确不做」）。
     """
     import os
 
@@ -706,7 +707,7 @@ async def market() -> dict[str, Any]:
 
 # ---- Agent 库（用户全局资产，跨公司共享）----------------------------------
 class DownloadRequest(BaseModel):
-    source_path: str  # v0：从本地源目录拷入库；Registry 上线后换远端拉取，接口不变
+    source_path: str  # 从本地包源目录拷入库；不做公开 Registry / 远端拉取
 
 
 @app.get("/api/library")

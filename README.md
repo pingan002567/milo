@@ -1,8 +1,9 @@
 # Milo
 
-> Agent 市场 + AI 组织指挥台（基于 DeerFlow 2.x）
-> MVP：小组模式——你 → 秘书 → 成员（≤5 并行），桌面端，embedded-first。
-> 第一设计原则：**一个 DeerFlow 实例 = 一个组织成员**，实例内部的 agent/subagent 编排不在产品范围内。
+> 本机 AI 团队指挥台（基于 DeerFlow 2.x）——本地市场验货 + 秘书编排
+> MVP：小组模式——你 → 秘书 → 成员（≤5 并行），桌面端，子进程 embedded-first。
+> 第一设计原则：**一个 DeerFlow 实例 = 一个组织成员**。
+> **明确不做**：流量型独立商店、任务转云端执行。
 
 ## 仓库结构
 
@@ -54,7 +55,8 @@
 3. 验收返工 R2/R3：轮次分节 UI · 跳过确认开关 · 归档群重新激活
 4. 团队管理 P1 删除团队 / P2 首次运行向导
 5. `milo eval` 真实模型跑一次（密钥已入钥匙串，条件具备）
-6. 长尾：鉴权 · Registry v0（M4）· llm-space Thread JSON 导入 · Tauri 真机验证通知直达
+6. 长尾：鉴权 · llm-space Thread JSON 导入 · Tauri 真机验证通知直达  
+   （已砍：公开 Registry / publish 商店、ContainerAdapter / 云端执行面）
 
 ## 启动
 

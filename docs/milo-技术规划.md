@@ -10,7 +10,7 @@
 
 ```
 ┌─ 桌面壳 (Tauri 2 + React/TS) ────────────────────────────┐
-│  六屏 UI（秘书长/待办/组织/市场/编制/设置）+ 任务群会话     │
+│  六屏 UI（秘书/待办/组织/本地市场/编制/设置）+ 任务群会话   │
 │  系统通知 · 钥匙串代理 · 文件对话框                        │
 └──────────────┬───────────────────────────────────────────┘
                │ localhost HTTP + WebSocket（事件推送）
@@ -18,20 +18,17 @@
 │  api/          FastAPI + WS：UI 的唯一后端                │
 │  secretariat/  分解(LLM) · 路由(确定性) · 调度 · 升级引擎  │
 │                · 验收 · 编制调和                          │
-│  adapter/      Member Contract 六动作，双实现：            │
-│                container(HTTP Gateway+SSE) / embedded     │
-│                (DeerFlowClient 进程内)                    │
+│  adapter/      Member Contract：SubprocessAdapter（主）   │
+│                EmbeddedAdapter（单成员开发兜底）            │
 │  pack/         MiloPack 解析/校验/渲染器                   │
-│                （→ deerflow-config.yaml + SOUL.md）        │
 │  config/       五文件分层加载 + keyring 钥匙串             │
-│  runtime/      容器生命周期（docker-py）· 健康检查 · 闲置休眠│
 │  store/        SQLite：org/task/event(append-only)/audit  │
-│  artifacts/    本地对象存储目录（接口抽象，后续可换 S3）    │
+│  artifacts/    本地对象存储目录                             │
 └──────────────┬───────────────────────────────────────────┘
-               │ HTTP/SSE（容器成员） · 进程内（embedded 成员）
-┌──────────────┴─ 执行面 ──────────────────────────────────┐
-│  每成员一个 DeerFlow 2.0 容器（官方镜像，pin tag）          │
-│  或 embedded 实例（弱隔离，本地轻量模式）                   │
+               │ stdio JSON-RPC（每成员一子进程）
+┌──────────────┴─ 执行面（本机，不做云端）──────────────────┐
+│  每成员一子进程 · DeerFlowClient + 私有工作区              │
+│  明确不做：ContainerAdapter / docker-py 执行面 / K8s 上云  │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -50,20 +47,20 @@
 | UI↔后端 | REST + WebSocket | WS 推 7 类事件；REST 做操作 |
 | 存储 | SQLite（WAL）+ 本地 artifacts 目录 | 单用户本地优先；事件表 append-only 即审计日志 |
 | 密钥 | keyring（Keychain/DPAPI） | 配置体系"密钥零落盘" |
-| 容器 | docker-py + 官方 DeerFlow 镜像（pin tag） | K8s 推迟到团队版 |
+| 成员运行时 | 子进程 + DeerFlowClient | **不做** docker/K8s/云端执行转型 |
 | 秘书长 LLM | OpenAI 兼容客户端直连 provider | 复用 providers.yaml；不经 DeerFlow |
-| SSE 消费 | httpx + Last-Event-ID 断线续传 | spike 验证项 |
 | 调度 | asyncio 单进程 | 并行 ≤5，无需消息队列 |
 | Schema | JSON Schema 单一来源（packages/schemas） | org.yaml/MiloPack/信封/事件四套，前后端共用生成类型 |
-| Registry v0 | Git 仓库 + release assets + index.json | 不建服务端；CLI 拉取+签名校验；真实发布者出现后再上服务 |
+| 包发现 | 本地包目录 + Agent 库 | **不做**流量型独立商店 / 公开 Registry 服务 |
 
 ## 3. 模块与接口要点
 
 ### 3.1 adapter/（Member Contract，spike 直接演化）
 - `MemberAdapter` 抽象基类：`enroll / assign / status_stream / escalate_events / deliver / dismiss`
-- `ContainerAdapter`：起容器 → 渲染配置注入 → `POST /api/agents`（SOUL.md）→ `PUT /api/skills/custom/*` → threads/runs/stream SSE → webhook + artifacts 下载
-- `EmbeddedAdapter`：DeerFlowClient 进程内，同一接口
-- 事件归一化层：DeerFlow SSE 原始事件 → Milo 7 类消息（**信任边界在此执行**：只有结构化事件字段驱动行为，正文文本一律标记为不可信数据）
+- `SubprocessAdapter`（主路径）：每成员一子进程，stdio JSON-RPC，env/工作区隔离
+- `EmbeddedAdapter`：同进程单成员开发兜底（弱隔离）
+- **不做** `ContainerAdapter` / 云端 Gateway 执行面（见产品方案「明确不做」）
+- 事件归一化：子进程事件 → Milo 7 类消息（**信任边界在此**：只有结构化字段驱动行为）
 
 ### 3.2 secretariat/
 - `decompose.py`：唯一用 LLM 的模块——用户输入 + 组员能力清单 → 计划（任务信封数组）；输出走 JSON Schema 强校验
@@ -86,13 +83,13 @@
 
 | 里程碑 | 周期 | 内容 | 验收标准 |
 |---|---|---|---|
-| **M0 Spike** | 2 周 | 六动作逐项验证（escalate 事件形态第一优先）；密钥最小注入验证 | spike 报告 + 可跑的 MemberAdapter 雏形；六动作各有"可行/需绕行"结论 |
-| **M1 核心闭环（CLI）** | 3 周 | milod 无 UI；`milo org init / enroll / assign / logs`；单成员容器全流程；config 五文件 + keychain + 渲染器 | 终端里完成"招募→派单→三槽位→交付验收"一整圈 |
-| **M2 秘书长 + 任务群** | 4 周 | decompose + 路由 + 调度 + 升级引擎 + 验收；7 事件落库；多成员并行；WS 事件流 | 两成员并行任务：计划批准 → 并行执行 → escalate 超时链触发 → 交付；事件表可完整回放任务群 |
-| **M3 桌面壳** | 4 周（与 M4 并行） | Tauri + React 按原型实现六屏 + 任务群三栏；系统通知；设置页写配置 | 原型的全部交互在真实数据上可用 |
-| **M4 MiloPack + Registry v0** | 4 周（与 M3 并行） | pack 校验器 + llm-space 导入器 + Git-based registry + `milo install/publish` | 从 registry 装一个第三方包完成招募全流程 |
+| **M0 Spike** | 2 周 | 六动作逐项验证；密钥最小注入 | spike 报告 + MemberAdapter 雏形 |
+| **M1 核心闭环（CLI）** | 3 周 | 子进程全流程；`milo init/add/run/reply/log`；config + keychain + 渲染器 | 终端完成"招募→派单→交付验收" |
+| **M2 秘书长 + 任务群** | 4 周 | decompose + 路由 + 调度 + 升级 + 验收；WS 事件流 | 两成员并行 + 计划批准 + escalate |
+| **M3 桌面壳** | 4 周 | Tauri + React 六屏 + 分级通知 + 本地市场验货 | 原型交互落在真实数据上 |
+| **M4 MiloPack 打磨** | 4 周 | pack 校验器 + llm-space 导入 + `milo eval` 质检报告 | **不做**公开 Registry / publish 商店 |
 
-M4 结束 = 产品方案 Phase 1+2 的 MVP 交付线。
+M3+M4 结束 ≈ 产品方案 Phase 1+2（本机 MVP）。流量商店与云端执行不进里程碑。
 
 ## 5. 仓库结构（monorepo）
 
@@ -114,15 +111,14 @@ milo/
 | 风险 | 对策 |
 |---|---|
 | escalate 事件形态未知（全案第一风险） | M0 第一项；若 SSE 无结构化澄清事件，绕行方案：以 run 中断态 + goal API 轮询归一化 |
-| DeerFlow config_version 漂移（当前 26，迭代快） | 渲染模板按版本矩阵；容器镜像 pin tag；升级 Milo 才升模板 |
-| 容器资源占用（5 成员 = 5 容器） | 闲置休眠（复用官方 idle_timeout）+ 懒启动（派单时唤醒）；embedded 模式做低配 fallback |
-| Windows 无 Docker | embedded 弱隔离模式兜底 + 明确提示；容器模式要求 Docker Desktop |
-| 秘书长 decompose 质量 | JSON Schema 强校验 + 拒绝重试；计划必须过组长批准（产品机制本身兜底） |
+| DeerFlow config_version 漂移（当前 26，迭代快） | 渲染模板按版本矩阵；harness 依赖 pin 官方 tag + `subdirectory=backend/packages/harness`；升级 Milo 才升模板 |
+| 多成员内存（每成员一子进程） | 懒启动 + 闲置回收；单机并行硬顶 ≤5 |
+| 秘书长 decompose 质量 | JSON Schema 强校验 + 拒绝重试；计划必须过用户批准 |
 | 事件风暴（成员刷屏） | adapter 层节流 + 三槽位归一化去重；events 表分页 |
 
 ## 7. 轻量化实现路线（embedded-first，先行执行）
 
-> 2026-07-18 决策：MVP 先走进程内路线，ContainerAdapter 推迟为同接口第二实现。
+> 2026-07-18 决策：embedded-first；2026-07-31 修订：**取消** ContainerAdapter / 云端执行面（明确不做）。
 
 - **形态（SPIKE-02 修正）**：milod 主进程（秘书长）+ **每成员一子进程**，子进程内一个 `DeerFlowClient`。
   修正原因：harness 的 `_app_config` 是进程级单例，后构造的 client 会覆盖先前全局配置；`get_paths()` 按环境变量动态解析——**单进程多成员不是安全隔离**（与编制设计 §3.4 冲突），且 asyncio 并发下无法用环境变量规避。
@@ -135,8 +131,8 @@ milo/
 - **SPIKE-01 推翻的两条原判断**：① `plan_mode=True` 不产生阻塞审批（只是 `write_todos` 自列计划后直接执行）→ **计划前置授权必须由秘书长在 Milo 侧实现**，不依赖运行时；② escalate 无结构化事件 → 三层方案叠加：契约标记（主）+ 秘书长判定（兜底）+ permissions 收敛使高危动作根本不可执行（不依赖成员自觉）。
 - **新增 M1 必办项**：传入 SQLite checkpointer——无 checkpointer 时每次 stream 无状态，组长群内补充信息无法接续上下文。
 - **明说的妥协**：隔离降级为目录级（同进程共享 env/文件权限，即 §3.4 embedded 弱隔离；密钥 keyring 解出后进程内注入，成员间密钥不隔离，lint 照常警告高危组合）；沙箱用 local provider（allow_host_bash: false）。
-- **收益**：M1 砍掉 docker-py/webhook/SSE 续传，缩至约 2 周；ContainerAdapter 后补不返工（同 MemberAdapter 接口）。
-- **spike 增补验证项**：① harness 子目录可安装性；② stream 同步/异步与多成员并发行为；③ thread 生命周期（每任务一 thread 的创建/复用）；④ escalate 事件形态（第一优先不变）；⑤ 多 harness 实例内存占用（决定单机成员数上限）。
+- **收益**：无 docker-py/webhook/云端面；**ContainerAdapter 已取消，不作为后续里程碑**（明确不做转云端执行）。
+- **spike 增补验证项**：① harness 可安装性；② 多成员子进程并发；③ thread 生命周期；④ escalate 形态；⑤ 内存上限。
 
 ## 8. 立即可开始的三件事
 
