@@ -1,7 +1,7 @@
 # Milo 市场调研与创新机会分析
 
-> 调研日期：2026-07-28
-> 调研范围：全球多智能体编排平台、中国市场 AI 应用产品、Agent 分发与 AI 员工产品、桌面 Agent 与 agentic workflow 工具
+> 首轮调研日期：2026-07-28（§一~§八）；补充调研：2026-08-03（§九 垂直/订阅）、2026-08-04（§十 免费版路径）
+> 调研范围：全球多智能体编排平台、中国市场 AI 应用产品、Agent 分发与 AI 员工产品、桌面 Agent 与 agentic workflow 工具、垂直 B2B、个人付费订阅、免费/开源路径
 > 目的：识别市场空白，为 Milo 的产品方向提供事实依据
 
 ---
@@ -222,6 +222,109 @@ Uber CTO"烧穿 AI 预算"说明成本可观测是半成品。Milo 已追踪用�
 
 ---
 
+## 九、垂直领域与个人订阅蓝海调研（2026-08-03）
+
+> 补充调研：垂直 B2B 格局（Harvey/Sierra/Abridge 等）+ 个人付费订阅赛道。目的：确定路径 B（垂直灯塔 + 通用基座）的灯塔场景。
+
+### 9.1 垂直 vs 通用：市场共识
+
+- VC 资金流向（Harvey $11B / Abridge $5.3B / Sierra $15.8B / EvenUp $2B+）说明 **2025-2026「垂直优先」是融资市场事实**；通用层被 OpenAI/Google/微软免费下沉。
+- a16z 2026-07《Lighthouse or Landgrab》：先按「买方风险暴露度 × 社交证明传导性」选 GTM，再按「灯塔 → 抢地」顺序演进。**小团队做通用产品的唯一正确姿势 = 垂直灯塔先打透，再抽象回通用层。**
+- 垂直关键不是功能深度，而是**数据/渠道/合规等结构性壁垒**（模型层不构成壁垒）。
+
+### 9.2 垂直红海（已确认，勿进）
+
+| 方向 | 证据 |
+|---|---|
+| 法律合同审查 | Harvey $11B、Spellbook、LegalOn $67M ARR 全线挤压 |
+| 医疗临床文书 | Abridge $5.3B、Ambience、Freed $20M ARR、EHR 厂商原生 |
+| 机构投研/文档分析 | Hebbia 占 40% 头部资管、Fiscal.ai 绑走 Google Finance/Perplexity |
+| 客服 agent | Sierra $15.8B、Decagon $4.5B + Zendesk/Intercom 内置 |
+| AI SDR/销售 | 11x 泡沫爆雷、Qualified 被 Salesforce 收购 |
+| 国内 C 端问答选股 | 同花顺问财/东财妙想垄断入口 + 投顾牌照红线 |
+
+### 9.3 个人付费订阅蓝海（已验证付费 × 格局未固化）
+
+个人订阅市场结论：**不是没人付钱，而是每个人只给一个 $15–25/月的预算，只给看得见 ROI 的工具。** 蓝海 = 能写进用户账单当"替代品"的产品。
+
+| # | 场景 | 付费证据 | 格局现状 | 定价带 |
+|---|---|---|---|---|
+| 1 | 个人执业者文书副驾（治疗师/教练/会计/房产经纪） | Freed 验证「$39–119/月换 2–3 小时」：$19M ARR、2 万付费医生 | 医疗已红，其他执业垂直空白 | $29–49/月 |
+| 2 | 个人 AI 记忆层（本地优先第二大脑） | Reflect $10、Mem $14.99 都在活 | 混战无赢家 | $8–12/月 |
+| 3 | AI 订阅审计/退订管家 | 41% 订阅疲劳、47% 取消率 | Rocket Money 旧式，无 AI 原生头部 | $3–5/月 |
+| 4 | 播客/音频创作者再创作管线 | OpusClip $10M ARR、ElevenLabs $500M ARR | Opus 主攻视频，音频→图文无头部 | $19–29/月 |
+| 5 | 消费者级合同/文书审查 | LegalZoom/Rocket Lawyer 已教育市场 | 无 AI 原生个人版头部 | $9–15/月 |
+
+**价位带**：$15–25 是个人生产力甜蜜点；$50 是硬天花板（Lindy $49.99 被大量吐槽）；$100+ 仅当产品直接帮用户赚钱/省钱时成立（Freed 医生）。**订阅疲劳显著**（41% 疲劳、47% 取消、53% 旋转式订阅、AI 年订阅留存流失 79%）——个人只愿意高频可见 ROI 的单工具。
+
+**伪蓝海（排除）**：通用个人 agent（Lindy 式，仅 9% 双订阅率）、陪伴/伴侣（337 个 app、Dot/Moxie/Yara 连死三个）、通用会议记录（免费化挤压）、通用生成类（Midjourney Top10→#46 教训）、第二大脑正面打 Notion AI。
+
+### 9.4 结论：灯塔场景 = 个人投研小组
+
+用「多成员协同价值 × 付费验证 × 与自身资产重合」筛选后，**投研工具层是唯一交叉最优解**：
+
+- 付费已验证：理财订阅成熟（Monarch $99/年、Copilot Money $13/月），个人愿为"管钱相关"付费
+- 格局未固化：机构端被 Hebbia/Fiscal.ai 围死，但**个人投资者"AI 小组干活"是结构性空白**——同花顺/东财做问答选股，不做多成员交付
+- 多成员协同是 Milo 唯一能赢的姿势：财报解读 → 事件跟踪 → 组合复盘，天然是任务群流程
+- 合规可绕：只做工具层（解读/复盘/跟踪），不碰荐股建议（投顾牌照红线）
+- 定价建议（若收费）：$15–25/月，年付 $99–149 对标 Monarch
+
+---
+
+## 十、免费版路径决策（2026-08-04）
+
+> 决策：**先不做订阅，只做免费版。** 商业化逻辑从"卖订阅"改为"开源/免费积累 → 云层/企业层变现"。
+> 本决定替代 §9 的订阅定价计划，§9 的灯塔场景（投研小组）选择不受影响。
+
+### 10.1 免费版格局：机会定位
+
+| 层 | 现状 | 玩家 |
+|---|---|---|
+| 通用本地客户端 | 红海（6-7 个 4 万+ star） | AnythingLLM 64k、Jan 44k、LM Studio、Cherry Studio 49k |
+| Agent 编排框架 | 已被占死 | CrewAI 57k、LangGraph 143k、Dify 151k |
+| **本地优先 + 多成员协作** | **空白**——本地产品没协作，协作产品不上本地 | 没人站在正中 |
+
+**定位结论**：通用本地客户端已红海、agent 编排框架已被占死，但「本地优先的多成员协作层」是真空白——AnythingLLM（协作最弱）、Jan/LM Studio（纯单机）、Obsidian（无 AI 编排）、Taskade/Dify（不上本地）都在旁边，**没人在正中**。
+
+### 10.2 免费版四条现实路径（按可复制性排序）
+
+| 路径 | 案例 | 适用性 |
+|---|---|---|
+| 1. 开源 → 云/托管层收费 | n8n（ARR $7M→$40M，一年 10 倍）、LangGraph Cloud、LM Studio 云 credits、Cline 网关 | **最主流最可复制**：本地永远免费，云上卖托管/协作/模型 credits |
+| 2. 开源 → 融资 → 企业版 | Dify（151k star 才 $180M 估值）、CrewAI、Cherry Studio（天使轮） | 需要团队+销售能力，以后的事 |
+| 3. 免费 → 小而美生意 | Obsidian（核心免费 + Sync/Publish 增值，0 融资） | 天花板：百万美元级 ARR |
+| 4. 开源 → 被收购 | OpenClaw（385k star → 加入 OpenAI） | **彩票，不可作为计划**（本质是 acqui-hire；金额未披露） |
+
+### 10.3 免费版四条红线（实证的坑）
+
+1. **成本红线**：免费必须绑定 **BYO API key**。OpenClaw 月成本 $10–20K 是反面教材；免费托管推理 = 自费补贴用户。→ Milo 成员跑用户自己的 key（钥匙串机制天然符合）
+2. **功能红线**：本地单机功能**永久免费**，收费只能落在云/协作/企业层。Chatbox 开源→闭源→再开源的反噬、AnythingLLM 社区敏感度（issue #4362）是前车之鉴
+3. **安全红线**：权限模型先于功能。OpenClaw 爆红后 40+ 漏洞危机；Matplotlib 维护者被 AI agent 攻击。→ Milo 子进程隔离 + 密钥零落盘是对应资产，免费版就要当卖点
+4. **维护红线**：防 AI 垃圾 PR/issue 洪流（Jazzband 已因此整体关停）——第一天配好过滤规则，早找 co-maintainer 防 burnout
+
+### 10.4 机会窗口
+
+- 2026 年是交叉点：n8n 的 AI 化（ARR 一年 10 倍）+ OpenClaw 本地 agent 热潮 + 多成员协作空白，三条线正好汇合
+- **窗口 6–18 个月**：大厂（Codex、Claude Code、Google）正在下压到 agent 桌面场景
+- **聪明打法**：挂靠 OpenClaw/ClawHub 生态做差异化层，而非从零发明轮子——「本地 + 多成员 + 质检」正是 ClawHub 生态没有的东西
+
+### 10.5 获客渠道优先级（个人开发者资源有限）
+
+1. GitHub 首发 + 演示 GIF/视频 README（冷启动基本盘）
+2. X + 技术 KOL 圈层（OpenClaw/Karpathy/local AI 圈）——最高杠杆
+3. Discord 社区（seed 期就开始，决定留存与生态）
+4. Reddit（r/LocalLLaMA、r/selfhosted、r/AI_Agents）
+5. 中文渠道（B站/小红书/公众号）做第二曲线，不占早期精力
+
+### 10.6 免费版决策要点
+
+- **免费版路线比订阅路线更适合**：订阅要解决付费信任（9% 双订阅率），免费靠「空白定位 + 差异化」冷启动
+- Milo 架构资产（子进程隔离、事件溯源、验收机制、本地优先）正好是免费本地协作产品最稀缺的部分
+- 不急着变现：先验证「本地多成员协作」品类有没有人用，有留存再走路径 1（云层收费）
+- 下一步：① 写「为什么是 Milo」叙事 README（差异化定位）；② 补安全/权限模型文档；③ 跑通 `milo eval` 真实质检（品类定义时刻）
+
+---
+
 ## 附：主要信息来源
 
 ### 全球多智能体平台
@@ -265,3 +368,36 @@ Uber CTO"烧穿 AI 预算"说明成本可观测是半成品。Milo 已追踪用�
 - 扣子/元器：infoq.cn/2025/07/28、finance.sina.com.cn/2024-08-15
 - Dify：thepaper.cn/2025-04
 - Trae/Qoder：aliyun.com/2026-07、csdn.net/2026-07
+
+### 垂直领域（2026-08-03 补充）
+- a16z《Lighthouse or Landgrab》：a16z.com/lighthouse-or-landgrab-how-to-pick-your-ai-sales-strategy
+- Harvey：techcrunch.com/2025/12/04/legal-ai-startup-harvey-confirms-8b-valuation、cnbc.com/2026/03/25
+- Hebbia/OpenAI：openai.com/index/hebbia
+- Abridge：abridge.com/blog/series-d
+- Sierra/Decagon/EvenUp/Spellbook/Ambience：sacra.com/c/ 各公司页
+- 11x 教训：techcrunch.com/2025/03/24、techcrunch.com/2025/05/05/11x-ceo-hasan-sukkar-steps-down
+- 中国合规：gov.cn/zhengce/zhengceku/202307/content_6891752.htm（生成式 AI 办法）、csrc.gov.cn（投顾牌照）
+
+### 个人订阅（2026-08-03 补充）
+- a16z State of Consumer AI：a16z.com/state-of-consumer-ai-2025-product-hits-misses-and-whats-next
+- Speak $100M ARR：forbes.com/sites/rashishrivastava/2025/11/12
+- ElevenLabs：elevenlabs.io/blog/500m-arr-and-new-investors
+- OpusClip：getlatka.com/companies/opus.pro
+- Freed：sacra.com/research/freed-at-19m-arr、getfreed.ai/pricing
+- 陪伴市场：techcrunch.com/2025/08/12/ai-companion-apps-on-track-to-pull-in-120m-in-2025
+- 订阅疲劳统计：readless.app/blog/subscription-fatigue-statistics-2026
+- Lindy 定价：lindy.ai/pricing
+- 失败案例：techstartups.com/2025/12/09/top-ai-startups-that-shut-down-in-2025
+- 豆包/Kimi 定价：llmabacus.com/subscriptions
+
+### 免费/开源路径（2026-08-04 补充）
+- OpenClaw 复盘：leanware.co/insights/openai-openclaw-acquisition、reuters.com/business/openclaw-founder-steinberger-joins-openai
+- Dify 融资：dify.ai/blog/dify-raises-30m
+- n8n：sacra.com/c/n8n/、wikipedia.org/wiki/N8n
+- LangChain B 轮：techcrunch.com/2025/10/21/open-source-agentic-startup-langchain-hits-1-25b-valuation
+- LM Studio 定价：lmstudio.ai/pricing
+- AnythingLLM 变现争议：github.com/Mintplex-Labs/anything-llm/issues/4362
+- Roo Code 关停：github.com/RooCodeInc/Roo-Code
+- AI 垃圾 PR 危机：thenewstack.io/ai-generated-code-crisis、coderabbit.ai/blog/ai-is-burning-out-the-people-who-keep-open-source-alive
+- Cherry Studio 融资：163.com/dy/article/KQVV63MC051984TV.html
+- Obsidian 免费化争议：reddit.com/r/ObsidianMD/comments/1shm3ym/
